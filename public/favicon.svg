@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#4338ca" />
+    </linearGradient>
+    <linearGradient id="checkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#grad)" />
+  <rect x="96" y="128" width="320" height="288" rx="48" fill="#ffffff" fill-opacity="0.95" />
+  <path d="M96 192h320v-16c0-26.51-21.49-48-48-48H144c-26.51 0-48 21.49-48 48v16z" fill="#4f46e5" />
+  <!-- Binder rings -->
+  <rect x="160" y="96" width="32" height="64" rx="16" fill="#ffffff" stroke="#4f46e5" stroke-width="8" />
+  <rect x="320" y="96" width="32" height="64" rx="16" fill="#ffffff" stroke="#4f46e5" stroke-width="8" />
+  <!-- Checkmark circle -->
+  <circle cx="256" cy="288" r="64" fill="url(#checkGrad)" />
+  <path d="M228 288l20 20 40-40" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
