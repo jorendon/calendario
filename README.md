@@ -129,8 +129,7 @@ npm test
 
 # Ejecutar pruebas en modo observador
 npm run test:watch
-```
-
+``
 ---
 
 ## 💻 Desarrollo Local
