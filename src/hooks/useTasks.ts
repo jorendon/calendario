@@ -96,7 +96,7 @@ export function useTasks() {
     return INITIAL_USERS;
   });
 
-  const [activeUser, setActiveUser] = useState<User>(() => {
+  const [activeUser, setActiveUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_ACTIVE_USER_KEY);
       if (saved) return JSON.parse(saved);
@@ -115,13 +115,27 @@ export function useTasks() {
     setTimeout(() => setNotificationMsg(null), 4500);
   };
 
+  const logout = () => {
+    setActiveUser(null);
+    try {
+      localStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
+    } catch {
+      // ignore
+    }
+    showToast('Sesión cerrada correctamente.');
+  };
+
   // Sync state to localStorage cache for offline resilience
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_TASKS_KEY, JSON.stringify(tasks));
       localStorage.setItem(STORAGE_CALENDARS_KEY, JSON.stringify(calendars));
       localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
-      localStorage.setItem(STORAGE_ACTIVE_USER_KEY, JSON.stringify(activeUser));
+      if (activeUser) {
+        localStorage.setItem(STORAGE_ACTIVE_USER_KEY, JSON.stringify(activeUser));
+      } else {
+        localStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
+      }
     } catch (e) {
       console.warn('LocalStorage save error:', e);
     }
@@ -219,7 +233,7 @@ export function useTasks() {
           amount: newTask.amount,
           currency: newTask.currency,
           category: newTask.category,
-          created_by: activeUser.email,
+          created_by: activeUser?.email || 'Jonathan.rendon@gmail.com',
           assigned_to: newTask.assignedTo
         })
       });
@@ -255,7 +269,7 @@ export function useTasks() {
             ...task,
             status: nextStatus,
             completedAt: isDone ? new Date().toISOString() : undefined,
-            completedBy: isDone ? activeUser.email : undefined
+            completedBy: isDone ? (activeUser?.name || activeUser?.email || 'Usuario') : undefined
           };
           return updatedTask;
         }
@@ -267,7 +281,7 @@ export function useTasks() {
       const isDone = (updatedTask as Task).status === 'DONE';
       showToast(
         isDone
-          ? `¡Tarea "${(updatedTask as Task).title}" marcada como LISTA! Notificación enviada a todos.`
+          ? `¡Tarea "${(updatedTask as Task).title}" marcada como LISTA! Se mantiene en el calendario.`
           : `Tarea reabierta como pendiente.`
       );
 
@@ -277,7 +291,7 @@ export function useTasks() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             status: (updatedTask as Task).status,
-            completed_by: activeUser.email
+            completed_by: activeUser?.name || activeUser?.email || 'Usuario'
           })
         });
       } catch {
@@ -320,14 +334,15 @@ export function useTasks() {
 
   // Create new Calendar
   const createCalendar = async (name: string, color: string, description?: string) => {
+    const creatorEmail = activeUser?.email || 'Jonathan.rendon@gmail.com';
     const newCal: Calendar = {
       id: `cal-${Date.now()}`,
       name,
       color,
       description,
-      createdBy: activeUser.email,
+      createdBy: creatorEmail,
       isDefault: false,
-      memberEmails: ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com', activeUser.email],
+      memberEmails: ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com', creatorEmail],
       createdAt: new Date().toISOString()
     };
 
@@ -342,7 +357,7 @@ export function useTasks() {
           name,
           color,
           description,
-          created_by: activeUser.email,
+          created_by: creatorEmail,
           member_emails: newCal.memberEmails
         })
       });
@@ -383,7 +398,7 @@ export function useTasks() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           calendar_id: selectedCalendarId !== 'all' ? selectedCalendarId : 'cal-shared-home',
-          user_email: activeUser.email,
+          user_email: activeUser?.email || 'Jonathan.rendon@gmail.com',
           tasks_to_import: tasksToImport
         })
       });
@@ -415,6 +430,7 @@ export function useTasks() {
     users,
     activeUser,
     setActiveUser,
+    logout,
     selectedCalendarId,
     setSelectedCalendarId,
     isLoading,

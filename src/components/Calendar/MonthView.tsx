@@ -84,9 +84,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       key={task.id}
                       className={`text-[11px] p-1.5 rounded-lg border flex items-start space-x-1.5 transition-all cursor-pointer ${
                         isDone
-                          ? 'bg-slate-900/50 border-slate-800/80 text-slate-500 line-through'
+                          ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100 hover:border-emerald-400 shadow-sm'
                           : isOverdue
-                          ? 'bg-rose-950/40 border-rose-500/30 text-rose-200 hover:border-rose-500/60'
+                          ? 'bg-rose-950/40 border-rose-500/40 text-rose-200 hover:border-rose-500/70'
                           : 'bg-slate-900/90 border-slate-700/60 text-slate-200 hover:border-indigo-500/60 hover:bg-slate-850'
                       }`}
                       onClick={() => onSelectTask(task)}
@@ -102,7 +102,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                         title={isDone ? 'Marcar como pendiente' : 'Marcar como LISTA'}
                       >
                         {isDone ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/20" />
                         ) : (
                           <Circle className="w-3.5 h-3.5 text-slate-400 hover:text-emerald-400" />
                         )}
@@ -110,8 +110,15 @@ export const MonthView: React.FC<MonthViewProps> = ({
 
                       {/* Task info */}
                       <div className="flex-1 truncate">
-                        <div className="font-medium truncate leading-tight">
-                          {task.title}
+                        <div className="flex items-center space-x-1.5 truncate">
+                          {isDone && (
+                            <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex-shrink-0">
+                              LISTA
+                            </span>
+                          )}
+                          <span className={`font-medium truncate leading-tight ${isDone ? 'line-through text-slate-200' : ''}`}>
+                            {task.title}
+                          </span>
                         </div>
                         {task.amount ? (
                           <div className="text-[10px] font-semibold text-emerald-400 flex items-center mt-0.5">

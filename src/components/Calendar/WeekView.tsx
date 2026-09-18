@@ -73,7 +73,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         onClick={() => onSelectTask(task)}
                         className={`p-2 rounded-xl border transition-all cursor-pointer ${
                           isDone
-                            ? 'bg-slate-900/40 border-slate-800 text-slate-500'
+                            ? 'bg-emerald-950/35 border-emerald-500/50 text-emerald-100 hover:border-emerald-400 shadow-sm'
                             : isOverdue
                             ? 'bg-rose-950/30 border-rose-500/40 text-rose-100 hover:border-rose-400'
                             : 'bg-slate-900 border-slate-700/80 text-slate-200 hover:border-indigo-500 hover:shadow-md'
@@ -89,15 +89,22 @@ export const WeekView: React.FC<WeekViewProps> = ({
                             className="mt-0.5 text-slate-400 hover:text-emerald-400 flex-shrink-0"
                           >
                             {isDone ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
                             ) : (
-                              <Circle className="w-4 h-4 text-slate-400" />
+                              <Circle className="w-4 h-4 text-slate-400 hover:text-emerald-400" />
                             )}
                           </button>
                           <div className="flex-1 min-w-0">
-                            <h4 className={`text-xs font-semibold truncate ${isDone ? 'line-through' : ''}`}>
-                              {task.title}
-                            </h4>
+                            <div className="flex items-center space-x-1.5 truncate">
+                              {isDone && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex-shrink-0">
+                                  LISTA
+                                </span>
+                              )}
+                              <h4 className={`text-xs font-semibold truncate ${isDone ? 'line-through text-slate-200' : ''}`}>
+                                {task.title}
+                              </h4>
+                            </div>
                             {task.dueTime && (
                               <div className="flex items-center space-x-1 text-[10px] text-slate-400 mt-1">
                                 <Clock className="w-3 h-3" />

@@ -65,7 +65,7 @@ export const DayView: React.FC<DayViewProps> = ({
                 onClick={() => onSelectTask(task)}
                 className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                   isDone
-                    ? 'bg-slate-950/40 border-slate-800 text-slate-500'
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-white hover:border-emerald-400 shadow-sm'
                     : 'bg-slate-800/80 border-slate-700/80 text-white hover:border-indigo-500 hover:shadow-lg'
                 }`}
               >
@@ -80,16 +80,23 @@ export const DayView: React.FC<DayViewProps> = ({
                       className="mt-1 text-slate-400 hover:text-emerald-400 transition-colors"
                     >
                       {isDone ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 fill-emerald-400/20" />
                       ) : (
                         <Circle className="w-5 h-5 text-slate-400 hover:text-emerald-400" />
                       )}
                     </button>
 
                     <div className="space-y-1 min-w-0">
-                      <h3 className={`text-base font-semibold ${isDone ? 'line-through text-slate-500' : ''}`}>
-                        {task.title}
-                      </h3>
+                      <div className="flex items-center space-x-2">
+                        {isDone && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            ✓ LISTA
+                          </span>
+                        )}
+                        <h3 className={`text-base font-semibold ${isDone ? 'line-through text-slate-200' : ''}`}>
+                          {task.title}
+                        </h3>
+                      </div>
                       {task.description && (
                         <p className="text-xs text-slate-400 line-clamp-2">
                           {task.description}
