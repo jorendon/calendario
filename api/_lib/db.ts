@@ -1,5 +1,5 @@
 import { sql } from '@vercel/postgres';
-import { DBUser, DBCalendar, DBTask, DBCategory } from './types';
+import type { DBUser, DBCalendar, DBTask, DBCategory } from './types.js';
 
 // In-memory store fallback for local development or when Vercel Postgres is not yet connected
 interface InMemoryStore {

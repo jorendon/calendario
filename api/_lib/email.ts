@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import type { DBTask } from './types';
+import type { DBTask } from './types.js';
 
 function getSmtpUser(): string | undefined {
   return (

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '@vercel/postgres';
-import { memoryStore, hasPostgres, initDatabase } from '../_lib/db';
-import { notifyCalendarMembers } from '../_lib/email';
-import { DBTask } from '../_lib/types';
+import { memoryStore, hasPostgres, initDatabase } from '../_lib/db.js';
+import { notifyCalendarMembers } from '../_lib/email.js';
+import type { DBTask } from '../_lib/types.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');

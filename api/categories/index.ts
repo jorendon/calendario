@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '@vercel/postgres';
-import { memoryStore, hasPostgres, initDatabase } from '../_lib/db';
-import { DBCategory } from '../_lib/types';
+import { memoryStore, hasPostgres, initDatabase } from '../_lib/db.js';
+import type { DBCategory } from '../_lib/types.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
