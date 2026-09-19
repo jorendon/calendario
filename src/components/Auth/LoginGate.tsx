@@ -10,7 +10,7 @@ interface LoginGateProps {
 export const LoginGate: React.FC<LoginGateProps> = ({ users, onLoginSuccess }) => {
   const [selectedUser, setSelectedUser] = useState<'jonathan' | 'michelle' | 'custom'>('jonathan');
   const [customEmail, setCustomEmail] = useState('');
-  const [password, setPassword] = useState('Calendario2006*');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -86,7 +86,7 @@ export const LoginGate: React.FC<LoginGateProps> = ({ users, onLoginSuccess }) =
         };
         onLoginSuccess(found);
       } else {
-        setError('Contraseña incorrecta. Recuerda: Calendario2006*');
+        setError('Contraseña incorrecta. Inténtalo de nuevo.');
       }
     } finally {
       setLoading(false);
@@ -128,7 +128,6 @@ export const LoginGate: React.FC<LoginGateProps> = ({ users, onLoginSuccess }) =
                 type="button"
                 onClick={() => {
                   setSelectedUser('jonathan');
-                  setPassword('Calendario2006*');
                   setError(null);
                 }}
                 className={`p-3 rounded-2xl border text-left transition-all flex items-center space-x-2.5 ${
@@ -150,7 +149,6 @@ export const LoginGate: React.FC<LoginGateProps> = ({ users, onLoginSuccess }) =
                 type="button"
                 onClick={() => {
                   setSelectedUser('michelle');
-                  setPassword('Calendario2006*');
                   setError(null);
                 }}
                 className={`p-3 rounded-2xl border text-left transition-all flex items-center space-x-2.5 ${
@@ -218,13 +216,10 @@ export const LoginGate: React.FC<LoginGateProps> = ({ users, onLoginSuccess }) =
 
             {/* Password */}
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="mb-1">
                 <label className="block text-xs font-semibold text-slate-300">
                   Contraseña
                 </label>
-                <span className="text-[11px] text-indigo-400 font-mono">
-                  Calendario2006*
-                </span>
               </div>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">

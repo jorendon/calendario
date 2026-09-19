@@ -78,7 +78,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         });
         onClose();
       } else {
-        setError('Contraseña incorrecta. (Recuerda la clave por defecto: Calendario2006*)');
+        setError('Contraseña incorrecta. Inténtalo de nuevo.');
       }
     } finally {
       setLoading(false);
@@ -157,10 +157,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             >
               {loading ? 'Ingresando...' : 'Iniciar Sesión'}
             </button>
-          </div>
-
-          <div className="text-center pt-1 text-[11px] text-slate-500">
-            Contraseña para Jonathan y Michelle: <span className="text-indigo-400 font-mono">Calendario2006*</span>
           </div>
         </form>
       </div>
