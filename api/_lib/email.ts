@@ -1,6 +1,5 @@
-import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
-import { DBTask } from './types';
+import type { DBTask } from './types';
 
 function getSmtpUser(): string | undefined {
   return (
@@ -98,81 +97,114 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
   // 1. Prefer SMTP (Gmail / Custom SMTP)
   if (config.provider === 'smtp' && smtpUser && smtpPass) {
     try {
-      const isGmail = config.smtp.host.includes('gmail') || smtpUser.includes('gmail');
-      
+      const cleanUser = smtpUser.trim();
+      const cleanPass = smtpPass.replace(/\s+/g, '');
+      const isGmail = config.smtp.host.includes('gmail') || cleanUser.includes('gmail');
+
       const transporter = nodemailer.createTransport(
         isGmail
           ? {
-              service: 'gmail',
+              host: 'smtp.gmail.com',
+              port: 465,
+              secure: true,
+              family: 4, // CRITICAL for AWS Lambda / Vercel to prevent IPv6 hanging
               auth: {
-                user: smtpUser,
-                pass: smtpPass
+                user: cleanUser,
+                pass: cleanPass
               },
-              connectionTimeout: 7000,
-              greetingTimeout: 7000,
-              socketTimeout: 9000
-            }
-          : {
+              connectionTimeout: 5000,
+              greetingTimeout: 5000,
+              socketTimeout: 5000
+            } as any
+          : ({
               host: config.smtp.host,
               port: config.smtp.port,
               secure: config.smtp.port === 465,
+              family: 4,
               auth: {
-                user: smtpUser,
-                pass: smtpPass
+                user: cleanUser,
+                pass: cleanPass
               },
-              connectionTimeout: 7000,
-              greetingTimeout: 7000,
-              socketTimeout: 9000
-            }
+              connectionTimeout: 5000,
+              greetingTimeout: 5000,
+              socketTimeout: 5000
+            } as any)
       );
 
-      const fromAddress = process.env.EMAIL_FROM?.trim() || `"Calendario Compartido" <${smtpUser}>`;
-      const info = await transporter.sendMail({
+      const fromAddress = process.env.EMAIL_FROM?.trim() || `"Calendario Compartido" <${cleanUser}>`;
+
+      // Enforce timeout strictly before Vercel kills the lambda
+      const sendPromise = transporter.sendMail({
         from: fromAddress,
         to: to.join(', '),
         subject,
         html
       });
 
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                'Tiempo de espera agotado (6s) al conectar con smtp.gmail.com. Verifica que la contraseña de 16 letras de Google sea correcta.'
+              )
+            ),
+          6500
+        )
+      );
+
+      const info = (await Promise.race([sendPromise, timeoutPromise])) as any;
+
       console.log('Email sent successfully via SMTP:', info.messageId);
       return { sent: true, provider: 'smtp', messageId: info.messageId };
     } catch (err: any) {
       console.error('Failed to send email with SMTP:', err);
       let friendlyError = err.message || String(err);
-      if (friendlyError.includes('535') || friendlyError.includes('BadCredentials') || friendlyError.includes('Username and Password not accepted')) {
-        friendlyError = 'Google rechazó la contraseña. Asegúrate de usar una "Contraseña de aplicación" de 16 letras generada en myaccount.google.com/apppasswords, no tu contraseña normal de Gmail.';
-      } else if (friendlyError.includes('ETIMEDOUT') || friendlyError.includes('ESOCKETTIMEDOUT')) {
-        friendlyError = 'Tiempo de espera agotado al conectar con el servidor de correo. Verifica tu conexión y configuración SMTP.';
+      if (
+        friendlyError.includes('535') ||
+        friendlyError.includes('BadCredentials') ||
+        friendlyError.includes('Username and Password not accepted')
+      ) {
+        friendlyError =
+          'Google rechazó la contraseña. Asegúrate de usar una "Contraseña de aplicación" de 16 letras generada en myaccount.google.com/apppasswords, no tu contraseña habitual de Gmail.';
       }
       return { sent: false, provider: 'smtp', error: friendlyError };
     }
   }
 
-  // 2. Resend provider
+  // 2. Resend provider via direct API
   if (config.provider === 'resend' && resendApiKey) {
     try {
-      const resend = new Resend(resendApiKey);
       const fromAddress = process.env.EMAIL_FROM?.trim() || 'Calendario Compartido <onboarding@resend.dev>';
       
-      const response = await resend.emails.send({
-        from: fromAddress,
-        to,
-        subject,
-        html
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: fromAddress,
+          to,
+          subject,
+          html
+        })
       });
 
-      if (response.error) {
-        console.error('Resend API returned error:', response.error);
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        console.error('Resend API returned error:', data.error || data);
         return {
           sent: false,
           provider: 'resend',
-          error: response.error.message || JSON.stringify(response.error),
-          details: response.error
+          error: data.message || data.error?.message || JSON.stringify(data),
+          details: data
         };
       }
 
-      console.log('Email sent successfully via Resend:', response.data?.id);
-      return { sent: true, provider: 'resend', id: response.data?.id };
+      console.log('Email sent successfully via Resend:', data.id);
+      return { sent: true, provider: 'resend', id: data.id };
     } catch (err: any) {
       console.error('Failed to send email with Resend:', err);
       return { sent: false, provider: 'resend', error: err.message || String(err) };
