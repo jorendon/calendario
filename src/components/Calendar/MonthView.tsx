@@ -1,13 +1,20 @@
 import React from 'react';
 import { Task } from '../../types';
-import { getMonthMatrix, toISODateString, isSameDay, formatCurrency } from '../../utils/dateUtils';
-import { CheckCircle2, Circle, DollarSign, Plus } from 'lucide-react';
+import {
+  getMonthMatrix,
+  toISODateString,
+  isSameDay,
+  formatCurrency,
+  isTaskScheduledForDate,
+  isTaskOccurrenceCompleted
+} from '../../utils/dateUtils';
+import { CheckCircle2, Circle, DollarSign, Plus, Repeat } from 'lucide-react';
 
 interface MonthViewProps {
   currentDate: Date;
   tasks: Task[];
-  onToggleTask: (taskId: string) => void;
-  onSelectTask: (task: Task) => void;
+  onToggleTask: (taskId: string, occurrenceDate?: string) => void;
+  onSelectTask: (task: Task, occurrenceDate?: string) => void;
   onSelectDate: (dateStr: string) => void;
 }
 
@@ -41,7 +48,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
           const dateStr = toISODateString(day);
           const isCurrentMonth = day.getMonth() === month;
           const isToday = isSameDay(day, today);
-          const dayTasks = tasks.filter(t => t.dueDate === dateStr);
+          const dayTasks = tasks.filter(t => isTaskScheduledForDate(t, day));
 
           return (
             <div
@@ -76,12 +83,13 @@ export const MonthView: React.FC<MonthViewProps> = ({
               {/* Day Tasks List */}
               <div className="flex-1 space-y-1 overflow-y-auto max-h-[85px] sm:max-h-[105px] custom-scrollbar pr-0.5">
                 {dayTasks.map(task => {
-                  const isDone = task.status === 'DONE';
-                  const isOverdue = !isDone && task.dueDate < todayStr;
+                  const isDone = isTaskOccurrenceCompleted(task, dateStr);
+                  const isOverdue = !isDone && dateStr < todayStr;
+                  const isRecurring = task.recurrence && task.recurrence !== 'NONE';
 
                   return (
                     <div
-                      key={task.id}
+                      key={`${task.id}-${dateStr}`}
                       className={`text-[11px] p-1.5 rounded-lg border flex items-start space-x-1.5 transition-all cursor-pointer ${
                         isDone
                           ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100 hover:border-emerald-400 shadow-sm'
@@ -89,14 +97,14 @@ export const MonthView: React.FC<MonthViewProps> = ({
                           ? 'bg-rose-950/40 border-rose-500/40 text-rose-200 hover:border-rose-500/70'
                           : 'bg-slate-900/90 border-slate-700/60 text-slate-200 hover:border-indigo-500/60 hover:bg-slate-850'
                       }`}
-                      onClick={() => onSelectTask(task)}
+                      onClick={() => onSelectTask(task, dateStr)}
                     >
                       {/* Checkbox toggle button */}
                       <button
                         type="button"
                         onClick={e => {
                           e.stopPropagation();
-                          onToggleTask(task.id);
+                          onToggleTask(task.id, dateStr);
                         }}
                         className="mt-0.5 flex-shrink-0 text-slate-400 hover:text-indigo-400 transition-colors"
                         title={isDone ? 'Marcar como pendiente' : 'Marcar como LISTA'}
@@ -111,11 +119,15 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       {/* Task info */}
                       <div className="flex-1 truncate">
                         <div className="flex items-center space-x-1.5 truncate">
-                          {isDone && (
+                          {isDone ? (
                             <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex-shrink-0">
                               LISTA
                             </span>
-                          )}
+                          ) : isRecurring ? (
+                            <span title="Tarea repetitiva" className="inline-flex items-center">
+                              <Repeat className="w-3 h-3 text-indigo-400 flex-shrink-0" />
+                            </span>
+                          ) : null}
                           <span className={`font-medium truncate leading-tight ${isDone ? 'line-through text-slate-200' : ''}`}>
                             {task.title}
                           </span>

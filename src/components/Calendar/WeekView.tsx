@@ -1,13 +1,21 @@
 import React from 'react';
 import { Task } from '../../types';
-import { getWeekDays, toISODateString, isSameDay, formatReadableDate, formatCurrency } from '../../utils/dateUtils';
-import { CheckCircle2, Circle, Clock, DollarSign, Plus } from 'lucide-react';
+import {
+  getWeekDays,
+  toISODateString,
+  isSameDay,
+  formatReadableDate,
+  formatCurrency,
+  isTaskScheduledForDate,
+  isTaskOccurrenceCompleted
+} from '../../utils/dateUtils';
+import { CheckCircle2, Circle, Clock, DollarSign, Plus, Repeat } from 'lucide-react';
 
 interface WeekViewProps {
   currentDate: Date;
   tasks: Task[];
-  onToggleTask: (taskId: string) => void;
-  onSelectTask: (task: Task) => void;
+  onToggleTask: (taskId: string, occurrenceDate?: string) => void;
+  onSelectTask: (task: Task, occurrenceDate?: string) => void;
   onSelectDate: (dateStr: string) => void;
 }
 
@@ -28,7 +36,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
         {weekDays.map((day, idx) => {
           const dateStr = toISODateString(day);
           const isToday = isSameDay(day, today);
-          const dayTasks = tasks.filter(t => t.dueDate === dateStr);
+          const dayTasks = tasks.filter(t => isTaskScheduledForDate(t, day));
 
           return (
             <div key={idx} className="flex-1 p-3 bg-slate-950/80 flex flex-col min-h-[160px] md:min-h-0">
@@ -64,13 +72,14 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   <p className="text-[11px] text-slate-600 italic py-2">Sin tareas programadas</p>
                 ) : (
                   dayTasks.map(task => {
-                    const isDone = task.status === 'DONE';
-                    const isOverdue = !isDone && task.dueDate < todayStr;
+                    const isDone = isTaskOccurrenceCompleted(task, dateStr);
+                    const isOverdue = !isDone && dateStr < todayStr;
+                    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
 
                     return (
                       <div
-                        key={task.id}
-                        onClick={() => onSelectTask(task)}
+                        key={`${task.id}-${dateStr}`}
+                        onClick={() => onSelectTask(task, dateStr)}
                         className={`p-2 rounded-xl border transition-all cursor-pointer ${
                           isDone
                             ? 'bg-emerald-950/35 border-emerald-500/50 text-emerald-100 hover:border-emerald-400 shadow-sm'
@@ -84,7 +93,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                             type="button"
                             onClick={e => {
                               e.stopPropagation();
-                              onToggleTask(task.id);
+                              onToggleTask(task.id, dateStr);
                             }}
                             className="mt-0.5 text-slate-400 hover:text-emerald-400 flex-shrink-0"
                           >
@@ -96,11 +105,15 @@ export const WeekView: React.FC<WeekViewProps> = ({
                           </button>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center space-x-1.5 truncate">
-                              {isDone && (
+                              {isDone ? (
                                 <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex-shrink-0">
                                   LISTA
                                 </span>
-                              )}
+                              ) : isRecurring ? (
+                                <span title="Tarea repetitiva" className="inline-flex items-center">
+                                  <Repeat className="w-3 h-3 text-indigo-400 flex-shrink-0" />
+                                </span>
+                              ) : null}
                               <h4 className={`text-xs font-semibold truncate ${isDone ? 'line-through text-slate-200' : ''}`}>
                                 {task.title}
                               </h4>

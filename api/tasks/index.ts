@@ -50,7 +50,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       category = 'other',
       calendar_id = 'cal-shared-home',
       created_by = 'Jonathan.rendon@gmail.com',
-      assigned_to = ''
+      assigned_to = '',
+      recurrence = 'NONE',
+      recurrence_day = null
     } = body;
 
     if (!title || !due_date) {
@@ -67,6 +69,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       amount: amount ? Number(amount) : undefined,
       currency,
       category,
+      recurrence,
+      recurrence_day: recurrence_day ? Number(recurrence_day) : undefined,
+      completed_dates: [],
       status: 'PENDING',
       created_by,
       assigned_to,
@@ -81,10 +86,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         await sql`
           INSERT INTO app_tasks (
-            id, calendar_id, title, description, due_date, due_time, amount, currency, category, status, created_by, assigned_to, created_at
+            id, calendar_id, title, description, due_date, due_time, amount, currency, category, recurrence, recurrence_day, completed_dates, status, created_by, assigned_to, created_at
           ) VALUES (
             ${newTask.id}, ${newTask.calendar_id}, ${newTask.title}, ${newTask.description || ''}, ${newTask.due_date},
             ${newTask.due_time || ''}, ${newTask.amount || null}, ${newTask.currency || 'USD'}, ${newTask.category},
+            ${newTask.recurrence || 'NONE'}, ${newTask.recurrence_day || null}, ${newTask.completed_dates as any || []},
             ${newTask.status}, ${newTask.created_by}, ${newTask.assigned_to || ''}, ${newTask.created_at}
           );
         `;

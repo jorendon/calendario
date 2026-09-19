@@ -20,6 +20,15 @@ export interface DBCalendar {
   created_at: string;
 }
 
+export interface DBCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface DBTask {
   id: string;
   calendar_id: string;
@@ -30,6 +39,9 @@ export interface DBTask {
   amount?: number;
   currency?: string;
   category: string;
+  recurrence?: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  recurrence_day?: number;
+  completed_dates?: string[];
   status: 'PENDING' | 'DONE';
   completed_at?: string;
   completed_by?: string;

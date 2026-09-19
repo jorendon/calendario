@@ -1,31 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarType, Task, TaskCategory } from '../../types';
-import { X, Calendar, DollarSign, Tag, Clock, AlignLeft, Send } from 'lucide-react';
+import { Calendar as CalendarType, Task, Category, TaskRecurrence } from '../../types';
+import { X, Calendar, DollarSign, Tag, Clock, Repeat, Plus, Send } from 'lucide-react';
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (taskData: Omit<Task, 'id' | 'createdAt' | 'status'>) => void;
   calendars: CalendarType[];
+  categories: Category[];
+  onOpenNewCategory: () => void;
   initialDate?: string;
   defaultCalendarId?: string;
   activeUserEmail: string;
 }
-
-const CATEGORIES: { id: TaskCategory; label: string; icon: string }[] = [
-  { id: 'rent', label: 'Renta', icon: '🏠' },
-  { id: 'bills', label: 'Servicios / Facturas', icon: '💡' },
-  { id: 'chores', label: 'Hogar / Limpieza', icon: '🧹' },
-  { id: 'personal', label: 'Personal', icon: '👤' },
-  { id: 'work', label: 'Trabajo', icon: '💼' },
-  { id: 'other', label: 'Otro', icon: '📌' }
-];
 
 export const TaskModal: React.FC<TaskModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
   calendars,
+  categories,
+  onOpenNewCategory,
   initialDate,
   defaultCalendarId,
   activeUserEmail
@@ -36,20 +31,31 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [dueTime, setDueTime] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
-  const [category, setCategory] = useState<TaskCategory>('rent');
+  const [category, setCategory] = useState<string>('rent');
+  const [recurrence, setRecurrence] = useState<TaskRecurrence>('NONE');
+  const [recurrenceDay, setRecurrenceDay] = useState<number>(25);
   const [calendarId, setCalendarId] = useState(defaultCalendarId || (calendars[0]?.id || 'cal-shared-home'));
 
   useEffect(() => {
     if (isOpen) {
       const today = new Date().toISOString().split('T')[0];
-      setDueDate(initialDate || today);
+      const targetDate = initialDate || today;
+      setDueDate(targetDate);
+      
+      const dayNum = Number(targetDate.split('-')[2]) || 25;
+      setRecurrenceDay(dayNum);
+
       if (defaultCalendarId && defaultCalendarId !== 'all') {
         setCalendarId(defaultCalendarId);
       } else if (calendars.length > 0) {
         setCalendarId(calendars[0].id);
       }
+
+      if (categories.length > 0) {
+        setCategory(categories[0].id);
+      }
     }
-  }, [isOpen, initialDate, defaultCalendarId, calendars]);
+  }, [isOpen, initialDate, defaultCalendarId, calendars, categories]);
 
   if (!isOpen) return null;
 
@@ -66,25 +72,28 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       amount: amount ? Number(amount) : undefined,
       currency,
       category,
+      recurrence,
+      recurrenceDay: recurrence === 'MONTHLY' ? recurrenceDay : undefined,
       createdBy: activeUserEmail
     });
 
     setTitle('');
     setDescription('');
     setAmount('');
+    setRecurrence('NONE');
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-850">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-850 flex-shrink-0">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
               <Calendar className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-bold text-white">Nueva Tarea / Pago</h3>
+            <h3 className="text-base font-bold text-white">Nueva Tarea o Pago</h3>
           </div>
           <button
             onClick={onClose}
@@ -95,7 +104,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm overflow-y-auto custom-scrollbar flex-1">
           {/* Title */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
@@ -104,10 +113,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             <input
               type="text"
               required
-              placeholder="Ej: Pagar la renta, compras, seguro médico..."
+              placeholder="Ej: Pagar la luz, Pagar la renta, Compras..."
               value={title}
               onChange={e => setTitle(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm"
             />
           </div>
 
@@ -120,7 +129,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <select
                 value={calendarId}
                 onChange={e => setCalendarId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-xs"
               >
                 {calendars.map(c => (
                   <option key={c.id} value={c.id}>
@@ -131,35 +140,94 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Categoría
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Categoría
+                </label>
+                <button
+                  type="button"
+                  onClick={onOpenNewCategory}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center space-x-0.5 font-medium"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Crear nueva</span>
+                </button>
+              </div>
               <select
                 value={category}
-                onChange={e => setCategory(e.target.value as TaskCategory)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-indigo-500"
+                onChange={e => setCategory(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-xs"
               >
-                {CATEGORIES.map(cat => (
+                {categories.map(cat => (
                   <option key={cat.id} value={cat.id}>
-                    {cat.icon} {cat.label}
+                    {cat.icon} {cat.name}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
+          {/* Recurrence (Tareas repetitivas) */}
+          <div className="bg-slate-950/70 border border-slate-800 p-3.5 rounded-2xl space-y-2.5">
+            <div className="flex items-center space-x-2 text-xs font-semibold text-indigo-300">
+              <Repeat className="w-4 h-4 text-indigo-400" />
+              <span>¿Es una tarea repetitiva? (Frecuencia)</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <select
+                value={recurrence}
+                onChange={e => setRecurrence(e.target.value as TaskRecurrence)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-xs"
+              >
+                <option value="NONE">No se repite (Única vez)</option>
+                <option value="DAILY">Diario (Todos los días)</option>
+                <option value="WEEKLY">Semanal (Una vez por semana)</option>
+                <option value="MONTHLY">Mensual (Un día fijo de cada mes)</option>
+                <option value="YEARLY">Anual (Una vez al año)</option>
+              </select>
+
+              {recurrence === 'MONTHLY' && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-slate-400 whitespace-nowrap">Día del mes:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={recurrenceDay}
+                    onChange={e => setRecurrenceDay(Number(e.target.value))}
+                    className="w-20 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500 text-xs text-center font-bold"
+                  />
+                  <span className="text-[11px] text-indigo-400 font-medium whitespace-nowrap">
+                    (Todos los {recurrenceDay})
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {recurrence !== 'NONE' && (
+              <p className="text-[11px] text-slate-400 italic">
+                💡 Esta tarea se repetirá automáticamente en el calendario según la frecuencia seleccionada.
+              </p>
+            )}
+          </div>
+
           {/* Date & Time */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Fecha límite *
+                Fecha de inicio / vencimiento *
               </label>
               <input
                 type="date"
                 required
                 value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-indigo-500"
+                onChange={e => {
+                  setDueDate(e.target.value);
+                  const d = Number(e.target.value.split('-')[2]);
+                  if (d) setRecurrenceDay(d);
+                }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-indigo-500 text-xs"
               />
             </div>
 
@@ -171,12 +239,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 type="time"
                 value={dueTime}
                 onChange={e => setDueTime(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-indigo-500 text-xs"
               />
             </div>
           </div>
 
-          {/* Amount / Price (for rent/bills) */}
+          {/* Amount / Price */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
               Monto a pagar (opcional para facturas o renta)
@@ -191,7 +259,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 placeholder="0.00"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 text-xs"
               />
             </div>
           </div>
@@ -203,7 +271,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </label>
             <textarea
               rows={2}
-              placeholder="Detalles de la cuenta, número de confirmación o instrucciones..."
+              placeholder="Instrucciones, detalles de la factura o recordatorios..."
               value={description}
               onChange={e => setDescription(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
@@ -214,7 +282,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           <div className="bg-indigo-950/40 border border-indigo-500/20 rounded-xl p-3 flex items-start space-x-2.5 text-xs text-indigo-300">
             <Send className="w-4 h-4 flex-shrink-0 mt-0.5 text-indigo-400" />
             <p>
-              Al crear esta tarea, se enviará un correo automático a los miembros de este calendario informando la nueva tarea.
+              Al crear esta tarea, se enviará un correo automático a los miembros de este calendario informando la tarea.
             </p>
           </div>
 
@@ -231,7 +299,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               type="submit"
               className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all"
             >
-              Crear Tarea
+              Guardar Tarea
             </button>
           </div>
         </form>

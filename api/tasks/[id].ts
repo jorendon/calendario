@@ -48,6 +48,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const updatedAmount = amount !== undefined ? amount : row.amount;
           const updatedCategory = category !== undefined ? category : row.category;
 
+          const updatedCompletedDates = body.completed_dates !== undefined ? body.completed_dates : row.completed_dates;
+          const updatedRecurrence = body.recurrence !== undefined ? body.recurrence : row.recurrence;
+          const updatedRecurrenceDay = body.recurrence_day !== undefined ? body.recurrence_day : row.recurrence_day;
+
           const updateRes = await sql`
             UPDATE app_tasks SET
               status = ${updatedStatus},
@@ -58,7 +62,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               due_date = ${updatedDueDate},
               due_time = ${updatedDueTime},
               amount = ${updatedAmount},
-              category = ${updatedCategory}
+              category = ${updatedCategory},
+              completed_dates = ${updatedCompletedDates as any},
+              recurrence = ${updatedRecurrence},
+              recurrence_day = ${updatedRecurrenceDay}
             WHERE id = ${id}
             RETURNING *;
           `;

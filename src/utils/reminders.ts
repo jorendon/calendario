@@ -1,5 +1,5 @@
 import { Task, CalendarSummary } from '../types';
-import { toISODateString } from './dateUtils';
+import { toISODateString, isTaskScheduledForDate, isTaskOccurrenceCompleted } from './dateUtils';
 
 export interface FilteredReminders {
   dueToday: Task[];
@@ -17,16 +17,23 @@ export function filterTaskReminders(tasks: Task[], refDate: Date = new Date()): 
   const completedRecently: Task[] = [];
 
   for (const task of tasks) {
-    if (task.status === 'DONE') {
+    const isCompletedForToday = isTaskOccurrenceCompleted(task, todayStr);
+    
+    if (isCompletedForToday) {
       completedRecently.push(task);
       continue;
     }
 
-    if (task.dueDate === todayStr) {
+    if (isTaskScheduledForDate(task, refDate)) {
       dueToday.push(task);
-    } else if (task.dueDate < todayStr) {
-      overdue.push(task);
+    } else if (!task.recurrence || task.recurrence === 'NONE') {
+      if (task.dueDate < todayStr) {
+        overdue.push(task);
+      } else {
+        upcoming.push(task);
+      }
     } else {
+      // For recurring tasks, if due date was set in the past and today is after recurrence day
       upcoming.push(task);
     }
   }
@@ -45,16 +52,14 @@ export function filterTaskReminders(tasks: Task[], refDate: Date = new Date()): 
 }
 
 export function calculateSummary(tasks: Task[], refDate: Date = new Date()): CalendarSummary {
-  const { dueToday, overdue } = filterTaskReminders(tasks, refDate);
+  const { dueToday, overdue, completedRecently } = filterTaskReminders(tasks, refDate);
   
   let pendingCount = 0;
-  let completedCount = 0;
   let totalPendingAmount = 0;
 
   for (const task of tasks) {
-    if (task.status === 'DONE') {
-      completedCount++;
-    } else {
+    const isDone = task.status === 'DONE';
+    if (!isDone) {
       pendingCount++;
       if (task.amount) {
         totalPendingAmount += Number(task.amount);
@@ -65,7 +70,7 @@ export function calculateSummary(tasks: Task[], refDate: Date = new Date()): Cal
   return {
     totalTasks: tasks.length,
     pendingTasks: pendingCount,
-    completedTasks: completedCount,
+    completedTasks: completedRecently.length,
     dueTodayTasks: dueToday.length,
     overdueTasks: overdue.length,
     totalPendingAmount

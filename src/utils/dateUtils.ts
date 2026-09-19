@@ -1,6 +1,7 @@
 /**
  * Date utility functions for Calendario Compartido
  */
+import { Task, TaskRecurrence } from '../types';
 
 export function toISODateString(date: Date): string {
   const year = date.getFullYear();
@@ -58,9 +59,9 @@ export function getMonthMatrix(year: number, month: number): Date[] {
   const firstDayOfMonth = new Date(year, month, 1);
   const lastDayOfMonth = new Date(year, month + 1, 0);
   
-  // Starting day of week (Monday as 0, Sunday as 6 for European/Latin standard)
+  // Starting day of week (Monday as 0, Sunday as 6)
   let startingDay = firstDayOfMonth.getDay() - 1;
-  if (startingDay < 0) startingDay = 6; // Sunday becomes index 6
+  if (startingDay < 0) startingDay = 6;
 
   const days: Date[] = [];
 
@@ -75,14 +76,13 @@ export function getMonthMatrix(year: number, month: number): Date[] {
     days.push(new Date(year, month, i));
   }
 
-  // Next month leading days to complete full 7-day rows (up to 35 or 42 cells)
+  // Next month leading days to complete full 7-day rows
   const totalDays = days.length;
   const remainingCells = (7 - (totalDays % 7)) % 7;
   for (let i = 1; i <= remainingCells; i++) {
     days.push(new Date(year, month + 1, i));
   }
 
-  // If only 35 days, optionally fill to 42 for fixed calendar height if desired, but 35 or 42 is fine
   return days;
 }
 
@@ -110,4 +110,74 @@ export function formatCurrency(amount?: number, currency = 'USD'): string {
     currency: currency,
     maximumFractionDigits: 2
   }).format(amount);
+}
+
+/**
+ * Checks if a task is scheduled to appear on a specific calendar date (handling one-time and recurring tasks)
+ */
+export function isTaskScheduledForDate(task: Task, date: Date): boolean {
+  const dateStr = toISODateString(date);
+
+  // If task start date is after the given date, it does not apply yet
+  if (task.dueDate > dateStr) {
+    return false;
+  }
+
+  const recurrence = task.recurrence || 'NONE';
+
+  if (recurrence === 'NONE') {
+    return task.dueDate === dateStr;
+  }
+
+  if (recurrence === 'DAILY') {
+    return true;
+  }
+
+  const taskStart = parseISODate(task.dueDate);
+
+  if (recurrence === 'WEEKLY') {
+    return date.getDay() === taskStart.getDay();
+  }
+
+  if (recurrence === 'MONTHLY') {
+    const targetDay = task.recurrenceDay || taskStart.getDate();
+    const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    
+    // If target day is 31 and month has 30 or 28 days, match the last day of the month
+    if (targetDay > daysInMonth) {
+      return date.getDate() === daysInMonth;
+    }
+    return date.getDate() === targetDay;
+  }
+
+  if (recurrence === 'YEARLY') {
+    return date.getMonth() === taskStart.getMonth() && date.getDate() === taskStart.getDate();
+  }
+
+  return false;
+}
+
+/**
+ * Checks if a task is completed for a specific occurrence date
+ */
+export function isTaskOccurrenceCompleted(task: Task, dateStr: string): boolean {
+  if (task.recurrence && task.recurrence !== 'NONE') {
+    return Boolean(task.completedDates?.includes(dateStr));
+  }
+  return task.status === 'DONE';
+}
+
+export function formatRecurrenceLabel(recurrence?: TaskRecurrence, day?: number): string {
+  switch (recurrence) {
+    case 'DAILY':
+      return 'Diaria';
+    case 'WEEKLY':
+      return 'Semanal';
+    case 'MONTHLY':
+      return day ? `Mensual (día ${day})` : 'Mensual';
+    case 'YEARLY':
+      return 'Anual';
+    default:
+      return '';
+  }
 }

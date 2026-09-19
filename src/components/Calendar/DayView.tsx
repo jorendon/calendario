@@ -1,13 +1,20 @@
 import React from 'react';
 import { Task } from '../../types';
-import { toISODateString, formatFullDate, formatCurrency } from '../../utils/dateUtils';
-import { CheckCircle2, Circle, Clock, DollarSign, Plus, Tag, User } from 'lucide-react';
+import {
+  toISODateString,
+  formatFullDate,
+  formatCurrency,
+  isTaskScheduledForDate,
+  isTaskOccurrenceCompleted,
+  formatRecurrenceLabel
+} from '../../utils/dateUtils';
+import { CheckCircle2, Circle, Clock, DollarSign, Plus, Tag, User, Repeat } from 'lucide-react';
 
 interface DayViewProps {
   currentDate: Date;
   tasks: Task[];
-  onToggleTask: (taskId: string) => void;
-  onSelectTask: (task: Task) => void;
+  onToggleTask: (taskId: string, occurrenceDate?: string) => void;
+  onSelectTask: (task: Task, occurrenceDate?: string) => void;
   onSelectDate: (dateStr: string) => void;
 }
 
@@ -19,7 +26,7 @@ export const DayView: React.FC<DayViewProps> = ({
   onSelectDate
 }) => {
   const dateStr = toISODateString(currentDate);
-  const dayTasks = tasks.filter(t => t.dueDate === dateStr);
+  const dayTasks = tasks.filter(t => isTaskScheduledForDate(t, currentDate));
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 overflow-y-auto custom-scrollbar shadow-xl">
@@ -57,12 +64,13 @@ export const DayView: React.FC<DayViewProps> = ({
       ) : (
         <div className="space-y-3">
           {dayTasks.map(task => {
-            const isDone = task.status === 'DONE';
+            const isDone = isTaskOccurrenceCompleted(task, dateStr);
+            const isRecurring = task.recurrence && task.recurrence !== 'NONE';
 
             return (
               <div
-                key={task.id}
-                onClick={() => onSelectTask(task)}
+                key={`${task.id}-${dateStr}`}
+                onClick={() => onSelectTask(task, dateStr)}
                 className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                   isDone
                     ? 'bg-emerald-950/30 border-emerald-500/40 text-white hover:border-emerald-400 shadow-sm'
@@ -75,7 +83,7 @@ export const DayView: React.FC<DayViewProps> = ({
                       type="button"
                       onClick={e => {
                         e.stopPropagation();
-                        onToggleTask(task.id);
+                        onToggleTask(task.id, dateStr);
                       }}
                       className="mt-1 text-slate-400 hover:text-emerald-400 transition-colors"
                     >
@@ -91,6 +99,12 @@ export const DayView: React.FC<DayViewProps> = ({
                         {isDone && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                             ✓ LISTA
+                          </span>
+                        )}
+                        {isRecurring && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
+                            <Repeat className="w-3 h-3" />
+                            <span>{formatRecurrenceLabel(task.recurrence, task.recurrenceDay)}</span>
                           </span>
                         )}
                         <h3 className={`text-base font-semibold ${isDone ? 'line-through text-slate-200' : ''}`}>

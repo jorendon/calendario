@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Task, Calendar, User } from '../types';
+import { Task, Calendar, User, Category } from '../types';
 import confetti from 'canvas-confetti';
 
-const STORAGE_TASKS_KEY = 'calendario_tasks_cache_v1';
-const STORAGE_CALENDARS_KEY = 'calendario_calendars_cache_v1';
-const STORAGE_USERS_KEY = 'calendario_users_cache_v1';
-const STORAGE_ACTIVE_USER_KEY = 'calendario_active_user_v1';
+const STORAGE_TASKS_KEY = 'calendario_tasks_cache_v2';
+const STORAGE_CALENDARS_KEY = 'calendario_calendars_cache_v2';
+const STORAGE_USERS_KEY = 'calendario_users_cache_v2';
+const STORAGE_ACTIVE_USER_KEY = 'calendario_active_user_v2';
+const STORAGE_CATEGORIES_KEY = 'calendario_categories_cache_v2';
 
 const INITIAL_USERS: User[] = [
   {
@@ -35,6 +36,15 @@ const INITIAL_CALENDARS: Calendar[] = [
   }
 ];
 
+export const INITIAL_CATEGORIES: Category[] = [
+  { id: 'rent', name: 'Renta', icon: '🏠', color: '#6366f1' },
+  { id: 'bills', name: 'Servicios / Facturas', icon: '💡', color: '#f59e0b' },
+  { id: 'chores', name: 'Hogar / Limpieza', icon: '🧹', color: '#10b981' },
+  { id: 'personal', name: 'Personal', icon: '👤', color: '#06b6d4' },
+  { id: 'work', name: 'Trabajo', icon: '💼', color: '#8b5cf6' },
+  { id: 'other', name: 'Otros', icon: '📌', color: '#64748b' }
+];
+
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>(() => {
     try {
@@ -55,20 +65,24 @@ export function useTasks() {
         amount: 1800,
         currency: 'USD',
         category: 'rent',
+        recurrence: 'MONTHLY',
+        recurrenceDay: 1,
         status: 'PENDING',
         createdBy: 'Jonathan.rendon@gmail.com',
         createdAt: new Date().toISOString()
       },
       {
-        id: 'task-internet-default',
+        id: 'task-power-default',
         calendarId: 'cal-shared-home',
-        title: 'Pagar servicio de Internet y Luz',
-        description: 'Factura mensual de servicios',
-        dueDate: today,
-        dueTime: '12:00',
-        amount: 120,
+        title: 'Pagar la luz',
+        description: 'Factura mensual de electricidad repetitiva todos los 25',
+        dueDate: '2026-09-25',
+        dueTime: '10:00',
+        amount: 110,
         currency: 'USD',
         category: 'bills',
+        recurrence: 'MONTHLY',
+        recurrenceDay: 25, // Repetitiva los 25 de cada mes
         status: 'PENDING',
         createdBy: 'michrotel@gmail.com',
         createdAt: new Date().toISOString()
@@ -86,6 +100,16 @@ export function useTasks() {
     return INITIAL_CALENDARS;
   });
 
+  const [categories, setCategories] = useState<Category[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_CATEGORIES_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return INITIAL_CATEGORIES;
+  });
+
   const [users, setUsers] = useState<User[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_USERS_KEY);
@@ -96,6 +120,7 @@ export function useTasks() {
     return INITIAL_USERS;
   });
 
+  // activeUser starts as null so Login Gate is strictly displayed first!
   const [activeUser, setActiveUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_ACTIVE_USER_KEY);
@@ -103,7 +128,7 @@ export function useTasks() {
     } catch {
       // ignore
     }
-    return INITIAL_USERS[0];
+    return null;
   });
 
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>('all');
@@ -125,11 +150,12 @@ export function useTasks() {
     showToast('Sesión cerrada correctamente.');
   };
 
-  // Sync state to localStorage cache for offline resilience
+  // Sync state to localStorage cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_TASKS_KEY, JSON.stringify(tasks));
       localStorage.setItem(STORAGE_CALENDARS_KEY, JSON.stringify(calendars));
+      localStorage.setItem(STORAGE_CATEGORIES_KEY, JSON.stringify(categories));
       localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
       if (activeUser) {
         localStorage.setItem(STORAGE_ACTIVE_USER_KEY, JSON.stringify(activeUser));
@@ -139,9 +165,9 @@ export function useTasks() {
     } catch (e) {
       console.warn('LocalStorage save error:', e);
     }
-  }, [tasks, calendars, users, activeUser]);
+  }, [tasks, calendars, categories, users, activeUser]);
 
-  // Fetch initial tasks from backend if online
+  // Fetch initial data from backend if online
   const fetchTasks = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -159,6 +185,9 @@ export function useTasks() {
             amount: d.amount ? Number(d.amount) : undefined,
             currency: d.currency || 'USD',
             category: d.category || 'other',
+            recurrence: d.recurrence || 'NONE',
+            recurrenceDay: d.recurrence_day ? Number(d.recurrence_day) : undefined,
+            completedDates: d.completed_dates || [],
             status: d.status || 'PENDING',
             completedAt: d.completed_at || d.completedAt,
             completedBy: d.completed_by || d.completedBy,
@@ -168,6 +197,14 @@ export function useTasks() {
             createdAt: d.created_at || d.createdAt
           }));
           setTasks(mapped);
+        }
+      }
+
+      const catRes = await fetch('/api/categories');
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        if (Array.isArray(catData) && catData.length > 0) {
+          setCategories(catData);
         }
       }
 
@@ -197,7 +234,7 @@ export function useTasks() {
         }
       }
     } catch {
-      // Local fallback active, no error to user
+      // Local fallback active
     } finally {
       setIsLoading(false);
     }
@@ -212,11 +249,11 @@ export function useTasks() {
     const newTask: Task = {
       ...taskData,
       id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      completedDates: [],
       status: 'PENDING',
       createdAt: new Date().toISOString()
     };
 
-    // Optimistic UI update
     setTasks(prev => [newTask, ...prev]);
     showToast(`Tarea "${newTask.title}" creada. Correo enviado a los miembros.`);
 
@@ -233,55 +270,85 @@ export function useTasks() {
           amount: newTask.amount,
           currency: newTask.currency,
           category: newTask.category,
+          recurrence: newTask.recurrence || 'NONE',
+          recurrence_day: newTask.recurrenceDay,
           created_by: activeUser?.email || 'Jonathan.rendon@gmail.com',
           assigned_to: newTask.assignedTo
         })
       });
     } catch {
-      // Saved in local cache
+      // Cached locally
     }
   };
 
-  // Toggle or mark Task as Done
-  const toggleTaskStatus = async (taskId: string) => {
+  // Toggle Task Status (handles non-recurring or specific occurrence date)
+  const toggleTaskStatus = async (taskId: string, occurrenceDate?: string) => {
     let updatedTask: Task | null = null;
+    const today = new Date().toISOString().split('T')[0];
+    const targetDate = occurrenceDate || today;
 
     setTasks(prev =>
       prev.map(task => {
         if (task.id === taskId) {
-          const nextStatus = task.status === 'DONE' ? 'PENDING' : 'DONE';
-          const isDone = nextStatus === 'DONE';
+          const isRecurring = task.recurrence && task.recurrence !== 'NONE';
 
-          if (isDone) {
-            // Confetti celebration
-            try {
-              confetti({
-                particleCount: 80,
-                spread: 70,
-                origin: { y: 0.7 }
-              });
-            } catch {
-              // ignore
+          if (isRecurring) {
+            // Toggle occurrence date in completedDates
+            const currentCompleted = task.completedDates || [];
+            const isAlreadyCompleted = currentCompleted.includes(targetDate);
+
+            const nextCompleted = isAlreadyCompleted
+              ? currentCompleted.filter(d => d !== targetDate)
+              : [...currentCompleted, targetDate];
+
+            if (!isAlreadyCompleted) {
+              try {
+                confetti({ particleCount: 75, spread: 65, origin: { y: 0.7 } });
+              } catch {
+                // ignore
+              }
             }
-          }
 
-          updatedTask = {
-            ...task,
-            status: nextStatus,
-            completedAt: isDone ? new Date().toISOString() : undefined,
-            completedBy: isDone ? (activeUser?.name || activeUser?.email || 'Usuario') : undefined
-          };
-          return updatedTask;
+            updatedTask = {
+              ...task,
+              completedDates: nextCompleted,
+              completedAt: !isAlreadyCompleted ? new Date().toISOString() : undefined,
+              completedBy: !isAlreadyCompleted ? (activeUser?.name || activeUser?.email || 'Usuario') : undefined
+            };
+            return updatedTask;
+          } else {
+            const nextStatus = task.status === 'DONE' ? 'PENDING' : 'DONE';
+            const isDone = nextStatus === 'DONE';
+
+            if (isDone) {
+              try {
+                confetti({ particleCount: 75, spread: 65, origin: { y: 0.7 } });
+              } catch {
+                // ignore
+              }
+            }
+
+            updatedTask = {
+              ...task,
+              status: nextStatus,
+              completedAt: isDone ? new Date().toISOString() : undefined,
+              completedBy: isDone ? (activeUser?.name || activeUser?.email || 'Usuario') : undefined
+            };
+            return updatedTask;
+          }
         }
         return task;
       })
     );
 
     if (updatedTask) {
-      const isDone = (updatedTask as Task).status === 'DONE';
+      const isDone = (updatedTask as Task).recurrence && (updatedTask as Task).recurrence !== 'NONE'
+        ? (updatedTask as Task).completedDates?.includes(targetDate)
+        : (updatedTask as Task).status === 'DONE';
+
       showToast(
         isDone
-          ? `¡Tarea "${(updatedTask as Task).title}" marcada como LISTA! Se mantiene en el calendario.`
+          ? `¡Tarea "${(updatedTask as Task).title}" marcada como LISTA!`
           : `Tarea reabierta como pendiente.`
       );
 
@@ -291,6 +358,7 @@ export function useTasks() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             status: (updatedTask as Task).status,
+            completed_dates: (updatedTask as Task).completedDates,
             completed_by: activeUser?.name || activeUser?.email || 'Usuario'
           })
         });
@@ -326,6 +394,35 @@ export function useTasks() {
     try {
       await fetch(`/api/tasks/${taskId}`, {
         method: 'DELETE'
+      });
+    } catch {
+      // Cached locally
+    }
+  };
+
+  // Create Category
+  const createCategory = async (name: string, icon: string, color: string) => {
+    const newCategory: Category = {
+      id: `cat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name,
+      icon,
+      color,
+      isCustom: true
+    };
+
+    setCategories(prev => [...prev, newCategory]);
+    showToast(`Categoría "${name}" creada exitosamente.`);
+
+    try {
+      await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          icon,
+          color,
+          created_by: activeUser?.email || 'Jonathan.rendon@gmail.com'
+        })
       });
     } catch {
       // Cached locally
@@ -427,6 +524,7 @@ export function useTasks() {
     tasks: filteredTasks,
     allTasks: tasks,
     calendars,
+    categories,
     users,
     activeUser,
     setActiveUser,
@@ -439,6 +537,7 @@ export function useTasks() {
     toggleTaskStatus,
     updateTask,
     deleteTask,
+    createCategory,
     createCalendar,
     addUser,
     importGoogleTasks,

@@ -6,8 +6,8 @@ import { CheckCircle2, Circle, AlertCircle, Clock, DollarSign, Calendar, ListFil
 
 interface AgendaViewProps {
   tasks: Task[];
-  onToggleTask: (taskId: string) => void;
-  onSelectTask: (task: Task) => void;
+  onToggleTask: (taskId: string, occurrenceDate?: string) => void;
+  onSelectTask: (task: Task, occurrenceDate?: string) => void;
 }
 
 export const AgendaView: React.FC<AgendaViewProps> = ({
@@ -34,7 +34,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     return (
       <div
         key={task.id}
-        onClick={() => onSelectTask(task)}
+        onClick={() => onSelectTask(task, task.dueDate)}
         className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
           isDone
             ? 'bg-emerald-950/30 border-emerald-500/40 text-slate-100 hover:border-emerald-400 shadow-sm'
