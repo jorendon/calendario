@@ -364,10 +364,11 @@ export function useTasks() {
       );
 
       try {
-        await fetch(`/api/tasks/${taskId}`, {
+        await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            id: taskId,
             action: isDone ? 'COMPLETED' : 'REOPENED',
             status: (updatedTask as Task).status,
             completed_dates: (updatedTask as Task).completedDates,
@@ -388,10 +389,11 @@ export function useTasks() {
     showToast('Tarea actualizada correctamente.');
 
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: taskId,
           action: 'EDITED',
           ...updates,
           due_date: updates.dueDate,
@@ -413,7 +415,7 @@ export function useTasks() {
     showToast('Tarea eliminada del calendario.');
 
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
         method: 'DELETE'
       });
     } catch {

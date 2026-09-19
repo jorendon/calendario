@@ -4,6 +4,14 @@ import { memoryStore, hasPostgres, initDatabase } from '../_lib/db.js';
 import { notifyCalendarMembers } from '../_lib/email.js';
 import type { DBTask } from '../_lib/types.js';
 
+function toPgTextArray(arr: any): string {
+  if (!arr || !Array.isArray(arr) || arr.length === 0) {
+    return '{}';
+  }
+  const clean = arr.map((x: any) => `"${String(x).replace(/"/g, '\\"')}"`);
+  return `{${clean.join(',')}}`;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -52,14 +60,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!existingTask) {
       return res.status(404).json({ error: 'Task not found' });
     }
-
-function toPgTextArray(arr: any): string {
-  if (!arr || !Array.isArray(arr) || arr.length === 0) {
-    return '{}';
-  }
-  const clean = arr.map((x: any) => `"${String(x).replace(/"/g, '\\"')}"`);
-  return `{${clean.join(',')}}`;
-}
 
     const prevStatus = existingTask.status;
     const prevCompletedDates = Array.isArray(existingTask.completed_dates) ? existingTask.completed_dates : [];
