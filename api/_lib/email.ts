@@ -2,33 +2,33 @@ import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 import { DBTask } from './types';
 
-// Resend Configuration
-const resendApiKey = process.env.RESEND_API_KEY;
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
-
-// SMTP / Gmail Configuration
-const smtpUser = process.env.SMTP_USER;
-const smtpPass = process.env.SMTP_PASS?.replace(/\s+/g, ''); // Remove spaces from Google App Passwords
-const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-const smtpPort = Number(process.env.SMTP_PORT) || 465;
-
 export function getEmailConfig() {
+  const smtpUser = process.env.SMTP_USER?.trim();
+  const smtpPass = process.env.SMTP_PASS?.replace(/\s+/g, '');
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  const smtpHost = process.env.SMTP_HOST?.trim() || 'smtp.gmail.com';
+  const smtpPort = Number(process.env.SMTP_PORT) || 465;
+
   const isSmtp = Boolean(smtpUser && smtpPass);
   const isResend = Boolean(resendApiKey);
-  
+
   return {
     isConfigured: isSmtp || isResend,
-    provider: isSmtp ? 'smtp' : isResend ? 'resend' : 'none',
+    provider: (isSmtp ? 'smtp' : isResend ? 'resend' : 'none') as 'smtp' | 'resend' | 'none',
     smtp: {
       hasUser: Boolean(smtpUser),
       hasPass: Boolean(smtpPass),
-      user: smtpUser ? smtpUser.replace(/^(.{3}).*(@.*)$/, '$1***$2') : null,
+      user: smtpUser
+        ? smtpUser.includes('@')
+          ? smtpUser.replace(/^(.{3}).*(@.*)$/, '$1***$2')
+          : smtpUser
+        : null,
       host: smtpHost,
       port: smtpPort
     },
     resend: {
       hasKey: Boolean(resendApiKey),
-      from: process.env.EMAIL_FROM || 'Calendario Compartido <onboarding@resend.dev>'
+      from: process.env.EMAIL_FROM?.trim() || 'Calendario Compartido <onboarding@resend.dev>'
     }
   };
 }
@@ -46,28 +46,50 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
   const config = getEmailConfig();
 
   if (!config.isConfigured) {
-    console.warn('[EMAIL WARNING] No email provider configured in environment variables (neither SMTP_USER/PASS nor RESEND_API_KEY).');
+    console.warn('[EMAIL WARNING] No email provider configured in environment variables.');
     return {
       sent: false,
       reason: 'not_configured',
-      message: 'No hay credenciales de correo configuradas en las variables de entorno de Vercel (SMTP_USER/PASS o RESEND_API_KEY).'
+      message: 'No hay credenciales de correo configuradas en Vercel (SMTP_USER/PASS o RESEND_API_KEY).'
     };
   }
 
-  // 1. Prefer SMTP (Gmail / Custom SMTP) because it doesn't restrict recipients on free accounts
+  const smtpUser = process.env.SMTP_USER?.trim();
+  const smtpPass = process.env.SMTP_PASS?.replace(/\s+/g, '');
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+
+  // 1. Prefer SMTP (Gmail / Custom SMTP)
   if (config.provider === 'smtp' && smtpUser && smtpPass) {
     try {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass
-        }
-      });
+      const isGmail = config.smtp.host.includes('gmail') || smtpUser.includes('gmail');
+      
+      const transporter = nodemailer.createTransport(
+        isGmail
+          ? {
+              service: 'gmail',
+              auth: {
+                user: smtpUser,
+                pass: smtpPass
+              },
+              connectionTimeout: 7000,
+              greetingTimeout: 7000,
+              socketTimeout: 9000
+            }
+          : {
+              host: config.smtp.host,
+              port: config.smtp.port,
+              secure: config.smtp.port === 465,
+              auth: {
+                user: smtpUser,
+                pass: smtpPass
+              },
+              connectionTimeout: 7000,
+              greetingTimeout: 7000,
+              socketTimeout: 9000
+            }
+      );
 
-      const fromAddress = process.env.EMAIL_FROM || `"Calendario Compartido" <${smtpUser}>`;
+      const fromAddress = process.env.EMAIL_FROM?.trim() || `"Calendario Compartido" <${smtpUser}>`;
       const info = await transporter.sendMail({
         from: fromAddress,
         to: to.join(', '),
@@ -79,14 +101,22 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
       return { sent: true, provider: 'smtp', messageId: info.messageId };
     } catch (err: any) {
       console.error('Failed to send email with SMTP:', err);
-      return { sent: false, provider: 'smtp', error: err.message || String(err) };
+      let friendlyError = err.message || String(err);
+      if (friendlyError.includes('535') || friendlyError.includes('BadCredentials') || friendlyError.includes('Username and Password not accepted')) {
+        friendlyError = 'Google rechazó la contraseña. Asegúrate de usar una "Contraseña de aplicación" de 16 letras generada en myaccount.google.com/apppasswords, no tu contraseña normal de Gmail.';
+      } else if (friendlyError.includes('ETIMEDOUT') || friendlyError.includes('ESOCKETTIMEDOUT')) {
+        friendlyError = 'Tiempo de espera agotado al conectar con el servidor de correo. Verifica tu conexión y configuración SMTP.';
+      }
+      return { sent: false, provider: 'smtp', error: friendlyError };
     }
   }
 
   // 2. Resend provider
-  if (config.provider === 'resend' && resend) {
-    const fromAddress = process.env.EMAIL_FROM || 'Calendario Compartido <onboarding@resend.dev>';
+  if (config.provider === 'resend' && resendApiKey) {
     try {
+      const resend = new Resend(resendApiKey);
+      const fromAddress = process.env.EMAIL_FROM?.trim() || 'Calendario Compartido <onboarding@resend.dev>';
+      
       const response = await resend.emails.send({
         from: fromAddress,
         to,
@@ -94,7 +124,6 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
         html
       });
 
-      // Resend SDK v4 returns { data, error } instead of throwing!
       if (response.error) {
         console.error('Resend API returned error:', response.error);
         return {
@@ -113,7 +142,7 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
     }
   }
 
-  return { sent: false, reason: 'unknown' };
+  return { sent: false, reason: 'unknown', error: 'No se pudo inicializar ningún proveedor de correo.' };
 }
 
 export async function notifyCalendarMembers(options: SendTaskEmailOptions) {

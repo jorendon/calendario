@@ -222,7 +222,14 @@ export const JsonImportModal: React.FC<JsonImportModalProps> = ({
         })
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error('El servidor devolvió una respuesta no válida: ' + text.substring(0, 100));
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Error al importar las tareas');
       }

@@ -45,8 +45,13 @@ export const EmailDiagnosticsModal: React.FC<EmailDiagnosticsModalProps> = ({
     try {
       const res = await fetch('/api/email/diagnostics');
       if (res.ok) {
-        const data = await res.json();
-        setConfig(data.config);
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          setConfig(data.config);
+        } catch {
+          // not json
+        }
       }
     } catch (err) {
       console.error('Error fetching email diagnostics:', err);
@@ -69,12 +74,23 @@ export const EmailDiagnosticsModal: React.FC<EmailDiagnosticsModalProps> = ({
         body: JSON.stringify({ targetEmail: testEmail })
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {
+          success: false,
+          message: 'El servidor de Vercel devolvió un error de ejecución.',
+          error: text.length > 200 ? text.substring(0, 200) + '...' : text,
+          troubleshooting: 'Verifica en Vercel Logs para ver el detalle de la función serverless.'
+        };
+      }
       setTestResult(data);
     } catch (err: any) {
       setTestResult({
         success: false,
-        message: 'Error de red al intentar contactar la API.',
+        message: 'Error de red o conexión al intentar enviar el correo de prueba.',
         error: err.message
       });
     } finally {
