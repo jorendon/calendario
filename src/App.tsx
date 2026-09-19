@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTasks } from './hooks/useTasks';
 import { calculateSummary } from './utils/reminders';
 import { Task } from './types';
@@ -50,9 +50,14 @@ export const App: React.FC = () => {
   // Modals state
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
-  const [selectedTaskForDetail, setSelectedTaskForDetail] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedOccurrenceDate, setSelectedOccurrenceDate] = useState<string | undefined>(undefined);
   const [initialTaskDate, setInitialTaskDate] = useState<string | undefined>(undefined);
+
+  // Derive the active task dynamically from allTasks so any status toggle or edit immediately reflects in the modal!
+  const selectedTaskForDetail = useMemo(() => {
+    return selectedTaskId ? allTasks.find(t => t.id === selectedTaskId) || null : null;
+  }, [selectedTaskId, allTasks]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -97,7 +102,7 @@ export const App: React.FC = () => {
   };
 
   const handleSelectTask = (task: Task, occurrenceDate?: string) => {
-    setSelectedTaskForDetail(task);
+    setSelectedTaskId(task.id);
     setSelectedOccurrenceDate(occurrenceDate);
   };
 
@@ -230,12 +235,13 @@ export const App: React.FC = () => {
         occurrenceDate={selectedOccurrenceDate}
         isOpen={Boolean(selectedTaskForDetail)}
         onClose={() => {
-          setSelectedTaskForDetail(null);
+          setSelectedTaskId(null);
           setSelectedOccurrenceDate(undefined);
         }}
         onToggleStatus={toggleTaskStatus}
         onDelete={deleteTask}
         onEdit={task => {
+          setSelectedTaskId(null);
           setTaskToEdit(task);
           setIsNewTaskOpen(true);
         }}

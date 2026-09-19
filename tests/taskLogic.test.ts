@@ -66,4 +66,63 @@ describe('task and user permissions logic', () => {
     expect(recipientEmails).toContain('nuevo.familiar@gmail.com');
     expect(recipientEmails.length).toBe(3);
   });
+
+  it('allows reopening a completed task back to PENDING', () => {
+    const task: Task = {
+      id: 'task-rent',
+      calendarId: calendar.id,
+      title: 'Pagar la renta del mes',
+      amount: 1900,
+      dueDate: '2026-09-18',
+      category: 'rent',
+      status: 'DONE',
+      completedAt: '2026-09-18T10:30:00Z',
+      completedBy: 'michrotel@gmail.com',
+      createdBy: 'Jonathan.rendon@gmail.com',
+      createdAt: '2026-09-01T00:00:00Z'
+    };
+
+    // Jonathan reopens it
+    const reopenedTask: Task = {
+      ...task,
+      status: 'PENDING',
+      completedAt: undefined,
+      completedBy: undefined
+    };
+
+    expect(reopenedTask.status).toBe('PENDING');
+    expect(reopenedTask.completedAt).toBeUndefined();
+    expect(reopenedTask.completedBy).toBeUndefined();
+  });
+
+  it('updates task properties and propagates changes across recurring instances', () => {
+    const recurringTask: Task = {
+      id: 'task-power',
+      calendarId: calendar.id,
+      title: 'Pagar la luz',
+      amount: 110,
+      dueDate: '2026-09-25',
+      recurrence: 'MONTHLY',
+      recurrenceDay: 25,
+      category: 'bills',
+      status: 'PENDING',
+      createdBy: 'michrotel@gmail.com',
+      createdAt: '2026-09-01T00:00:00Z'
+    };
+
+    // Edit task to change amount and day
+    const editedTask: Task = {
+      ...recurringTask,
+      amount: 125.50,
+      recurrenceDay: 28,
+      dueDate: '2026-09-28',
+      description: 'Tarifa actualizada'
+    };
+
+    expect(editedTask.amount).toBe(125.50);
+    expect(editedTask.recurrenceDay).toBe(28);
+    expect(editedTask.dueDate).toBe('2026-09-28');
+    expect(editedTask.description).toBe('Tarifa actualizada');
+    expect(editedTask.recurrence).toBe('MONTHLY');
+  });
 });

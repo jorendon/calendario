@@ -89,15 +89,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let calendarName = 'Hogar & Finanzas Compartidas';
     let memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
 
+function toPgTextArray(arr: any): string {
+  if (!arr || !Array.isArray(arr) || arr.length === 0) {
+    return '{}';
+  }
+  const clean = arr.map((x: any) => `"${String(x).replace(/"/g, '\\"')}"`);
+  return `{${clean.join(',')}}`;
+}
+
     if (hasPostgres) {
       try {
+        const pgArrayLiteral = toPgTextArray(newTask.completed_dates);
         await sql`
           INSERT INTO app_tasks (
             id, calendar_id, title, description, due_date, due_time, amount, currency, category, recurrence, recurrence_day, completed_dates, status, created_by, assigned_to, created_at
           ) VALUES (
             ${newTask.id}, ${newTask.calendar_id}, ${newTask.title}, ${newTask.description || ''}, ${newTask.due_date},
             ${newTask.due_time || ''}, ${newTask.amount || null}, ${newTask.currency || 'USD'}, ${newTask.category},
-            ${newTask.recurrence || 'NONE'}, ${newTask.recurrence_day || null}, ${newTask.completed_dates as any || []},
+            ${newTask.recurrence || 'NONE'}, ${newTask.recurrence_day || null}, ${pgArrayLiteral}::text[],
             ${newTask.status}, ${newTask.created_by}, ${newTask.assigned_to || ''}, ${newTask.created_at}
           )
           ON CONFLICT (id) DO UPDATE SET

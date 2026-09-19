@@ -53,6 +53,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Task not found' });
     }
 
+function toPgTextArray(arr: any): string {
+  if (!arr || !Array.isArray(arr) || arr.length === 0) {
+    return '{}';
+  }
+  const clean = arr.map((x: any) => `"${String(x).replace(/"/g, '\\"')}"`);
+  return `{${clean.join(',')}}`;
+}
+
     const prevStatus = existingTask.status;
     const prevCompletedDates = Array.isArray(existingTask.completed_dates) ? existingTask.completed_dates : [];
 
@@ -71,16 +79,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const completed_dates = body.completed_dates !== undefined ? body.completed_dates : (body.completedDates !== undefined ? body.completedDates : (existingTask.completed_dates || []));
     const completed_by = body.completed_by || body.completedBy;
 
-    // Accurate completion check
+    // Detect action: completion, reopening, or edit
+    const bodyAction = body.action as string | undefined;
     const isRegularDone = status === 'DONE' && prevStatus !== 'DONE';
     const isRecurringDone = Array.isArray(completed_dates) && completed_dates.length > prevCompletedDates.length;
-    const isMarkingDone = isRegularDone || isRecurringDone;
+    const isDone = isRegularDone || isRecurringDone;
 
-    const completedAt = isMarkingDone ? new Date().toISOString() : (status === 'PENDING' ? null : existingTask.completed_at);
-    const completedBy = isMarkingDone ? (completed_by || 'Usuario') : (status === 'PENDING' ? null : existingTask.completed_by);
+    const isRegularReopened = status === 'PENDING' && prevStatus === 'DONE';
+    const isRecurringReopened = Array.isArray(completed_dates) && completed_dates.length < prevCompletedDates.length;
+    const isReopened = isRegularReopened || isRecurringReopened;
+
+    let notificationType: 'COMPLETED' | 'REOPENED' | 'EDITED' | null = null;
+    if (bodyAction === 'COMPLETED' || isDone) {
+      notificationType = 'COMPLETED';
+    } else if (bodyAction === 'REOPENED' || isReopened) {
+      notificationType = 'REOPENED';
+    } else if (bodyAction === 'EDITED' || (body.title !== undefined || body.amount !== undefined || body.due_date !== undefined || body.description !== undefined)) {
+      notificationType = 'EDITED';
+    }
+
+    const completedAt = (notificationType === 'COMPLETED' || isDone)
+      ? new Date().toISOString()
+      : (status === 'PENDING' ? null : existingTask.completed_at);
+    const completedBy = (notificationType === 'COMPLETED' || isDone)
+      ? (completed_by || 'Usuario')
+      : (status === 'PENDING' ? null : existingTask.completed_by);
 
     if (hasPostgres) {
       try {
+        const pgArrayLiteral = toPgTextArray(completed_dates);
         const updateRes = await sql`
           UPDATE app_tasks SET
             status = ${status},
@@ -93,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             amount = ${amount},
             currency = ${currency},
             category = ${category},
-            completed_dates = ${completed_dates as any},
+            completed_dates = ${pgArrayLiteral}::text[],
             recurrence = ${recurrence},
             recurrence_day = ${recurrence_day},
             assigned_to = ${assigned_to}
@@ -134,8 +161,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       memoryStore.tasks.push(existingTask);
     }
 
-    // Send email notification if marked as completed
-    if (isMarkingDone) {
+    // Send email notification if marked as completed, reopened, or edited
+    if (notificationType) {
       let calendarName = 'Hogar & Finanzas Compartidas';
       let memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
 
@@ -158,15 +185,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       try {
         const emailRes = await notifyCalendarMembers({
-          type: 'COMPLETED',
+          type: notificationType,
           task: existingTask,
           calendarName,
           recipients: memberEmails,
-          actionBy: completedBy || completed_by || 'Jonathan o Michelle'
+          actionBy: completedBy || completed_by || body.updated_by || 'Jonathan o Michelle'
         });
-        console.log('Task completion email result:', emailRes);
+        console.log(`Task ${notificationType} email result:`, emailRes);
       } catch (e) {
-        console.error('Error sending completion email:', e);
+        console.error(`Error sending ${notificationType} email:`, e);
       }
     }
 

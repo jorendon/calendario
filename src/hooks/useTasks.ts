@@ -368,6 +368,7 @@ export function useTasks() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: isDone ? 'COMPLETED' : 'REOPENED',
             status: (updatedTask as Task).status,
             completed_dates: (updatedTask as Task).completedDates,
             completed_by: activeUser?.name || activeUser?.email || 'Usuario'
@@ -391,12 +392,14 @@ export function useTasks() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'EDITED',
           ...updates,
           due_date: updates.dueDate,
           due_time: updates.dueTime,
           recurrence_day: updates.recurrenceDay,
           calendar_id: updates.calendarId,
-          assigned_to: updates.assignedTo
+          assigned_to: updates.assignedTo,
+          updated_by: activeUser?.name || activeUser?.email || 'Usuario'
         })
       });
     } catch {

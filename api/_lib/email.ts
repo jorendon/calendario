@@ -70,7 +70,7 @@ export function getEmailConfig() {
 }
 
 export interface SendTaskEmailOptions {
-  type: 'CREATED' | 'COMPLETED' | 'REMINDER';
+  type: 'CREATED' | 'COMPLETED' | 'REOPENED' | 'EDITED' | 'REMINDER';
   task?: DBTask;
   tasks?: DBTask[];
   calendarName?: string;
@@ -112,9 +112,9 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
                 user: cleanUser,
                 pass: cleanPass
               },
-              connectionTimeout: 5000,
-              greetingTimeout: 5000,
-              socketTimeout: 5000
+              connectionTimeout: 6000,
+              greetingTimeout: 6000,
+              socketTimeout: 6000
             } as any
           : ({
               host: config.smtp.host,
@@ -125,41 +125,59 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
                 user: cleanUser,
                 pass: cleanPass
               },
-              connectionTimeout: 5000,
-              greetingTimeout: 5000,
-              socketTimeout: 5000
+              connectionTimeout: 6000,
+              greetingTimeout: 6000,
+              socketTimeout: 6000
             } as any)
       );
 
       const fromAddress = process.env.EMAIL_FROM?.trim() || `"Calendario Compartido" <${cleanUser}>`;
 
-      // Enforce timeout strictly before Vercel kills the lambda
-      const sendPromise = transporter.sendMail({
-        from: fromAddress,
-        to: to.join(', '),
-        subject,
-        html
-      });
+      let sentSuccess = false;
+      let lastMsgId = '';
+      let lastErr: any = null;
 
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                'Tiempo de espera agotado (6s) al conectar con smtp.gmail.com. Verifica que la contraseña de 16 letras de Google sea correcta.'
-              )
-            ),
-          6500
-        )
-      );
+      try {
+        const sendPromise = transporter.sendMail({
+          from: fromAddress,
+          to: to.join(', '),
+          subject,
+          html
+        });
 
-      const info = (await Promise.race([sendPromise, timeoutPromise])) as any;
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Tiempo de espera agotado (8s) con smtp.gmail.com')), 8000)
+        );
 
-      console.log('Email sent successfully via SMTP:', info.messageId);
-      return { sent: true, provider: 'smtp', messageId: info.messageId };
-    } catch (err: any) {
-      console.error('Failed to send email with SMTP:', err);
-      let friendlyError = err.message || String(err);
+        const info = (await Promise.race([sendPromise, timeoutPromise])) as any;
+        sentSuccess = true;
+        lastMsgId = info.messageId;
+        console.log('Email sent successfully via batch SMTP:', info.messageId);
+      } catch (batchErr: any) {
+        console.warn('Batch SMTP send failed, attempting individual delivery:', batchErr.message);
+        lastErr = batchErr;
+        for (const singleTo of to) {
+          try {
+            const singleInfo = await transporter.sendMail({
+              from: fromAddress,
+              to: singleTo,
+              subject,
+              html
+            });
+            sentSuccess = true;
+            lastMsgId = singleInfo.messageId;
+            console.log(`Email sent individually to ${singleTo} via SMTP:`, singleInfo.messageId);
+          } catch (singleErr) {
+            console.error(`Failed to send to ${singleTo} via SMTP:`, singleErr);
+          }
+        }
+      }
+
+      if (sentSuccess) {
+        return { sent: true, provider: 'smtp', messageId: lastMsgId };
+      }
+
+      let friendlyError = lastErr?.message || String(lastErr);
       if (
         friendlyError.includes('535') ||
         friendlyError.includes('BadCredentials') ||
@@ -169,6 +187,9 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
           'Google rechazó la contraseña. Asegúrate de usar una "Contraseña de aplicación" de 16 letras generada en myaccount.google.com/apppasswords, no tu contraseña habitual de Gmail.';
       }
       return { sent: false, provider: 'smtp', error: friendlyError };
+    } catch (err: any) {
+      console.error('Failed to send email with SMTP:', err);
+      return { sent: false, provider: 'smtp', error: err.message || String(err) };
     }
   }
 
@@ -346,6 +367,96 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
             <tr>
               <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">📅 Fecha de vencimiento:</td>
               <td style="color: #e2e8f0; padding: 6px 0; font-size: 14px;">${task.due_date}</td>
+            </tr>
+          </table>
+        </div>
+
+        <p style="color: #94a3b8; font-size: 13px; text-align: center; margin-top: 24px;">
+          Notificación enviada a todos los miembros (${primaryRecipients.join(', ')}).
+        </p>
+      </div>
+    `;
+  } else if (type === 'REOPENED' && task) {
+    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+    subject = isRecurring
+      ? `🔄 Tarea repetitiva reabierta: ${task.title}`
+      : `🔄 Tarea reabierta como pendiente: ${task.title}`;
+    htmlContent = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="color: #f59e0b; margin: 0; font-size: 24px;">🔄 Tarea Reabierta</h1>
+          <p style="color: #94a3b8; font-size: 14px; margin-top: 4px;">Calendario: <strong>${calendarName}</strong></p>
+        </div>
+        
+        <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+          <h2 style="color: #ffffff; margin-top: 0; font-size: 20px;">${task.title}</h2>
+          ${task.description ? `<p style="color: #cbd5e1; font-size: 14px;">${task.description}</p>` : ''}
+          
+          <table style="width: 100%; margin-top: 16px; border-collapse: collapse;">
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">👤 Reabierta por:</td>
+              <td style="color: #f59e0b; padding: 6px 0; font-weight: 700; font-size: 15px;">${actionBy || 'Un miembro'}</td>
+            </tr>
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">📅 Fecha de vencimiento:</td>
+              <td style="color: #e2e8f0; padding: 6px 0; font-size: 14px;">${task.due_date} ${task.due_time ? `(${task.due_time})` : ''}</td>
+            </tr>
+            ${isRecurring ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">🔄 Frecuencia:</td>
+              <td style="color: #c084fc; padding: 6px 0; font-size: 14px;">Tarea repetitiva (${task.recurrence}).</td>
+            </tr>` : ''}
+            ${task.amount ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">💵 Monto pendiente:</td>
+              <td style="color: #f1f5f9; padding: 6px 0; font-weight: 600; font-size: 14px;">$${Number(task.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${task.currency || 'USD'}</td>
+            </tr>` : ''}
+          </table>
+        </div>
+
+        <p style="color: #94a3b8; font-size: 13px; text-align: center; margin-top: 24px;">
+          Notificación enviada a todos los miembros (${primaryRecipients.join(', ')}).
+        </p>
+      </div>
+    `;
+  } else if (type === 'EDITED' && task) {
+    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+    subject = isRecurring
+      ? `✏️ Tarea repetitiva actualizada: ${task.title}`
+      : `✏️ Tarea actualizada: ${task.title}`;
+    htmlContent = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="color: #60a5fa; margin: 0; font-size: 24px;">✏️ Tarea Modificada</h1>
+          <p style="color: #94a3b8; font-size: 14px; margin-top: 4px;">Calendario: <strong>${calendarName}</strong></p>
+        </div>
+        
+        <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
+          <h2 style="color: #ffffff; margin-top: 0; font-size: 20px;">${task.title}</h2>
+          ${task.description ? `<p style="color: #cbd5e1; font-size: 14px;">${task.description}</p>` : ''}
+          
+          <table style="width: 100%; margin-top: 16px; border-collapse: collapse;">
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">👤 Modificada por:</td>
+              <td style="color: #60a5fa; padding: 6px 0; font-weight: 700; font-size: 15px;">${actionBy || 'Un miembro'}</td>
+            </tr>
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">📅 Fecha límite:</td>
+              <td style="color: #f1f5f9; padding: 6px 0; font-weight: 600; font-size: 14px;">${task.due_date} ${task.due_time ? `(${task.due_time})` : ''}</td>
+            </tr>
+            ${isRecurring ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">🔄 Repetición:</td>
+              <td style="color: #c084fc; padding: 6px 0; font-weight: 600; font-size: 14px;">${task.recurrence}${task.recurrence_day ? ` (Día ${task.recurrence_day})` : ''} - Actualizada en todas sus repeticiones</td>
+            </tr>` : ''}
+            ${task.amount ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">💵 Monto:</td>
+              <td style="color: #34d399; padding: 6px 0; font-weight: 700; font-size: 16px;">$${Number(task.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${task.currency || 'USD'}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">🏷️ Categoría:</td>
+              <td style="color: #e2e8f0; padding: 6px 0; font-size: 14px; text-transform: capitalize;">${task.category}</td>
             </tr>
           </table>
         </div>
