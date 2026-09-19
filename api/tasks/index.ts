@@ -39,7 +39,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const body = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    body = body || {};
+
     const {
       title,
       description = '',
@@ -108,20 +117,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Always update in-memory cache
     memoryStore.tasks.push(newTask);
     const inMemCal = memoryStore.calendars.find(c => c.id === calendar_id);
-    if (inMemCal) {
-      calendarName = inMemCal.name;
-      memberEmails = inMemCal.member_emails;
+    if (!memberEmails || memberEmails.length === 0) {
+      memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
     }
 
     // Send email notification to all members of the calendar (must await in serverless so Vercel does not freeze execution)
     try {
-      await notifyCalendarMembers({
+      const emailRes = await notifyCalendarMembers({
         type: 'CREATED',
         task: newTask,
         calendarName,
         recipients: memberEmails,
         actionBy: created_by
       });
+      console.log('Task creation email result:', emailRes);
     } catch (e) {
       console.error('Error sending creation email:', e);
     }

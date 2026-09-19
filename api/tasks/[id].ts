@@ -22,13 +22,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'PATCH') {
-    const body = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    body = body || {};
+
     const { status, completed_by, title, description, due_date, due_time, amount, category } = body;
 
     let existingTask: DBTask | undefined = memoryStore.tasks.find(t => t.id === id);
     let calendarId = existingTask?.calendar_id || 'cal-shared-home';
 
-    const isMarkingDone = status === 'DONE' && existingTask?.status !== 'DONE';
+    const isRecurringOccurrence = Array.isArray(body.completed_dates) && body.completed_dates.length > (existingTask?.completed_dates?.length || 0);
+    const isMarkingDone = status === 'DONE' || isRecurringOccurrence;
     const completedAt = isMarkingDone ? new Date().toISOString() : undefined;
 
     if (hasPostgres) {
@@ -97,20 +107,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let calendarName = 'Hogar & Finanzas Compartidas';
       let memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
 
-      const inMemCal = memoryStore.calendars.find(c => c.id === calendarId);
-      if (inMemCal) {
-        calendarName = inMemCal.name;
-        memberEmails = inMemCal.member_emails;
+      if (!memberEmails || memberEmails.length === 0) {
+        memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
       }
 
       try {
-        await notifyCalendarMembers({
+        const emailRes = await notifyCalendarMembers({
           type: 'COMPLETED',
           task: existingTask,
           calendarName,
           recipients: memberEmails,
           actionBy: completed_by || 'Jonathan o Michelle'
         });
+        console.log('Task completion email result:', emailRes);
       } catch (e) {
         console.error('Error sending completion email:', e);
       }
