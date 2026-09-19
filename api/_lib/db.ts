@@ -60,7 +60,7 @@ function getTodayISO(): string {
 
 const DEFAULT_TASKS: DBTask[] = [
   {
-    id: 'task-rent-sample',
+    id: 'task-rent-default',
     calendar_id: 'cal-shared-home',
     title: 'Pagar la renta del mes',
     description: 'Hacer la transferencia bancaria de la renta',
@@ -76,7 +76,7 @@ const DEFAULT_TASKS: DBTask[] = [
     created_at: new Date().toISOString()
   },
   {
-    id: 'task-power-sample',
+    id: 'task-power-default',
     calendar_id: 'cal-shared-home',
     title: 'Pagar la luz',
     description: 'Factura mensual de electricidad recurrente los 25',
@@ -214,6 +214,21 @@ export async function initDatabase() {
       await sql`
         INSERT INTO app_categories (id, name, icon, color, created_by)
         VALUES (${cat.id}, ${cat.name}, ${cat.icon}, ${cat.color}, ${cat.created_by})
+        ON CONFLICT (id) DO NOTHING;
+      `;
+    }
+
+    // Seed default tasks
+    for (const t of DEFAULT_TASKS) {
+      await sql`
+        INSERT INTO app_tasks (
+          id, calendar_id, title, description, due_date, due_time, amount, currency, category, recurrence, recurrence_day, completed_dates, status, created_by
+        ) VALUES (
+          ${t.id}, ${t.calendar_id}, ${t.title}, ${t.description || ''}, ${t.due_date},
+          ${t.due_time || ''}, ${t.amount || null}, ${t.currency || 'USD'}, ${t.category},
+          ${t.recurrence || 'NONE'}, ${t.recurrence_day || null}, '{}'::text[],
+          'PENDING', ${t.created_by}
+        )
         ON CONFLICT (id) DO NOTHING;
       `;
     }

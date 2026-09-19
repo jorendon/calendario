@@ -353,13 +353,14 @@ export function useTasks() {
     );
 
     if (updatedTask) {
-      const isDone = (updatedTask as Task).recurrence && (updatedTask as Task).recurrence !== 'NONE'
-        ? (updatedTask as Task).completedDates?.includes(targetDate)
-        : (updatedTask as Task).status === 'DONE';
+      const currentTask = updatedTask as Task;
+      const isDone = currentTask.recurrence && currentTask.recurrence !== 'NONE'
+        ? currentTask.completedDates?.includes(targetDate)
+        : currentTask.status === 'DONE';
 
       showToast(
         isDone
-          ? `¡Tarea "${(updatedTask as Task).title}" marcada como LISTA!`
+          ? `¡Tarea "${currentTask.title}" marcada como LISTA!`
           : `Tarea reabierta como pendiente.`
       );
 
@@ -370,9 +371,20 @@ export function useTasks() {
           body: JSON.stringify({
             id: taskId,
             action: isDone ? 'COMPLETED' : 'REOPENED',
-            status: (updatedTask as Task).status,
-            completed_dates: (updatedTask as Task).completedDates,
-            completed_by: activeUser?.name || activeUser?.email || 'Usuario'
+            status: currentTask.status,
+            completed_dates: currentTask.completedDates || [],
+            completed_by: activeUser?.name || activeUser?.email || 'Usuario',
+            title: currentTask.title,
+            description: currentTask.description || '',
+            due_date: currentTask.dueDate,
+            due_time: currentTask.dueTime || '',
+            amount: currentTask.amount,
+            currency: currentTask.currency || 'USD',
+            category: currentTask.category || 'other',
+            recurrence: currentTask.recurrence || 'NONE',
+            recurrence_day: currentTask.recurrenceDay,
+            calendar_id: currentTask.calendarId || 'cal-shared-home',
+            assigned_to: currentTask.assignedTo || ''
           })
         });
       } catch {
@@ -383,40 +395,76 @@ export function useTasks() {
 
   // Update Task details
   const updateTask = async (taskId: string, updates: Partial<Task>) => {
+    let fullUpdated: Task | null = null;
     setTasks(prev =>
-      prev.map(task => (task.id === taskId ? { ...task, ...updates } : task))
+      prev.map(task => {
+        if (task.id === taskId) {
+          fullUpdated = { ...task, ...updates };
+          return fullUpdated;
+        }
+        return task;
+      })
     );
     showToast('Tarea actualizada correctamente.');
 
-    try {
-      await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: taskId,
-          action: 'EDITED',
-          ...updates,
-          due_date: updates.dueDate,
-          due_time: updates.dueTime,
-          recurrence_day: updates.recurrenceDay,
-          calendar_id: updates.calendarId,
-          assigned_to: updates.assignedTo,
-          updated_by: activeUser?.name || activeUser?.email || 'Usuario'
-        })
-      });
-    } catch {
-      // Cached locally
+    if (fullUpdated) {
+      const cur = fullUpdated as Task;
+      try {
+        await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: taskId,
+            action: 'EDITED',
+            title: cur.title,
+            description: cur.description || '',
+            due_date: cur.dueDate,
+            due_time: cur.dueTime || '',
+            amount: cur.amount,
+            currency: cur.currency || 'USD',
+            category: cur.category || 'other',
+            recurrence: cur.recurrence || 'NONE',
+            recurrence_day: cur.recurrenceDay,
+            status: cur.status || 'PENDING',
+            completed_dates: cur.completedDates || [],
+            calendar_id: cur.calendarId || 'cal-shared-home',
+            assigned_to: cur.assignedTo || '',
+            updated_by: activeUser?.name || activeUser?.email || 'Usuario'
+          })
+        });
+      } catch {
+        // Cached locally
+      }
     }
   };
 
   // Delete Task
   const deleteTask = async (taskId: string) => {
+    const taskToDelete = tasks.find(task => task.id === taskId);
     setTasks(prev => prev.filter(task => task.id !== taskId));
     showToast('Tarea eliminada del calendario.');
 
     try {
       await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: taskId,
+          task: taskToDelete ? {
+            id: taskToDelete.id,
+            title: taskToDelete.title,
+            description: taskToDelete.description || '',
+            due_date: taskToDelete.dueDate,
+            due_time: taskToDelete.dueTime || '',
+            amount: taskToDelete.amount,
+            currency: taskToDelete.currency || 'USD',
+            category: taskToDelete.category || 'other',
+            recurrence: taskToDelete.recurrence || 'NONE',
+            recurrence_day: taskToDelete.recurrenceDay,
+            calendar_id: taskToDelete.calendarId || 'cal-shared-home'
+          } : undefined,
+          deleted_by: activeUser?.name || activeUser?.email || 'Jonathan o Michelle'
+        })
       });
     } catch {
       // Cached locally

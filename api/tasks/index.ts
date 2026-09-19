@@ -207,22 +207,42 @@ function toPgTextArray(arr: any): string {
     }
 
     if (!existingTask) {
-      return res.status(404).json({ error: 'Task not found' });
+      // Build task from body if not found in database (e.g. default tasks or offline creation)
+      existingTask = {
+        id,
+        calendar_id: body.calendar_id || body.calendarId || 'cal-shared-home',
+        title: body.title || 'Tarea',
+        description: body.description || '',
+        due_date: body.due_date || body.dueDate || new Date().toISOString().split('T')[0],
+        due_time: body.due_time !== undefined ? body.due_time : (body.dueTime !== undefined ? body.dueTime : ''),
+        amount: body.amount !== undefined && body.amount !== null && body.amount !== '' ? Number(body.amount) : undefined,
+        currency: body.currency || 'USD',
+        category: body.category || 'other',
+        recurrence: body.recurrence || 'NONE',
+        recurrence_day: body.recurrence_day !== undefined ? Number(body.recurrence_day) : (body.recurrenceDay !== undefined ? Number(body.recurrenceDay) : undefined),
+        status: (body.status as any) || 'PENDING',
+        completed_dates: Array.isArray(body.completed_dates) ? body.completed_dates : (Array.isArray(body.completedDates) ? body.completedDates : []),
+        created_by: body.created_by || body.createdBy || 'Jonathan.rendon@gmail.com',
+        assigned_to: body.assigned_to || body.assignedTo || '',
+        created_at: new Date().toISOString()
+      };
     }
 
     const prevStatus = existingTask.status;
     const prevCompletedDates = Array.isArray(existingTask.completed_dates) ? existingTask.completed_dates : [];
 
     const title = body.title !== undefined ? body.title : existingTask.title;
-    const description = body.description !== undefined ? body.description : existingTask.description;
-    const due_date = body.due_date || body.dueDate || existingTask.due_date;
-    const due_time = body.due_time !== undefined ? body.due_time : (body.dueTime !== undefined ? body.dueTime : existingTask.due_time);
-    const amount = body.amount !== undefined ? (body.amount !== '' && body.amount !== null ? Number(body.amount) : null) : existingTask.amount;
+    const description = body.description !== undefined ? body.description : (existingTask.description || '');
+    const due_date = body.due_date || body.dueDate || existingTask.due_date || new Date().toISOString().split('T')[0];
+    const due_time = (body.due_time !== undefined ? body.due_time : (body.dueTime !== undefined ? body.dueTime : existingTask.due_time)) || '';
+    const rawAmount = body.amount !== undefined ? (body.amount !== '' && body.amount !== null ? Number(body.amount) : null) : (existingTask.amount !== undefined ? existingTask.amount : null);
+    const amount = rawAmount !== null && !isNaN(Number(rawAmount)) ? Number(rawAmount) : null;
     const currency = body.currency || existingTask.currency || 'USD';
-    const category = body.category || existingTask.category;
-    const recurrence = body.recurrence !== undefined ? body.recurrence : existingTask.recurrence;
-    const recurrence_day = body.recurrence_day !== undefined ? body.recurrence_day : (body.recurrenceDay !== undefined ? body.recurrenceDay : existingTask.recurrence_day);
-    const assigned_to = body.assigned_to !== undefined ? body.assigned_to : (body.assignedTo !== undefined ? body.assignedTo : existingTask.assigned_to);
+    const category = body.category || existingTask.category || 'other';
+    const recurrence = body.recurrence !== undefined ? body.recurrence : (existingTask.recurrence || 'NONE');
+    const recurrence_day = body.recurrence_day !== undefined ? (body.recurrence_day !== null && body.recurrence_day !== '' ? Number(body.recurrence_day) : null) : (body.recurrenceDay !== undefined ? (body.recurrenceDay !== null && body.recurrenceDay !== '' ? Number(body.recurrenceDay) : null) : (existingTask.recurrence_day !== undefined ? existingTask.recurrence_day : null));
+    const assigned_to = (body.assigned_to !== undefined ? body.assigned_to : (body.assignedTo !== undefined ? body.assignedTo : existingTask.assigned_to)) || '';
+    const calendar_id = existingTask.calendar_id || body.calendar_id || body.calendarId || 'cal-shared-home';
 
     const status = body.status !== undefined ? body.status : existingTask.status;
     const completed_dates = body.completed_dates !== undefined ? body.completed_dates : (body.completedDates !== undefined ? body.completedDates : (existingTask.completed_dates || []));
@@ -258,22 +278,29 @@ function toPgTextArray(arr: any): string {
       try {
         const pgArrayLiteral = toPgTextArray(completed_dates);
         const updateRes = await sql`
-          UPDATE app_tasks SET
-            status = ${status},
-            completed_at = ${completedAt},
-            completed_by = ${completedBy},
-            title = ${title},
-            description = ${description},
-            due_date = ${due_date},
-            due_time = ${due_time},
-            amount = ${amount},
-            currency = ${currency},
-            category = ${category},
-            completed_dates = ${pgArrayLiteral}::text[],
-            recurrence = ${recurrence},
-            recurrence_day = ${recurrence_day},
-            assigned_to = ${assigned_to}
-          WHERE id = ${id}
+          INSERT INTO app_tasks (
+            id, calendar_id, title, description, due_date, due_time, amount, currency, category, recurrence, recurrence_day, completed_dates, status, completed_at, completed_by, created_by, assigned_to
+          ) VALUES (
+            ${id}, ${calendar_id}, ${title}, ${description}, ${due_date},
+            ${due_time}, ${amount}, ${currency}, ${category},
+            ${recurrence}, ${recurrence_day}, ${pgArrayLiteral}::text[],
+            ${status}, ${completedAt || null}, ${completedBy || null}, ${existingTask.created_by || 'Jonathan.rendon@gmail.com'}, ${assigned_to}
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            status = EXCLUDED.status,
+            completed_at = EXCLUDED.completed_at,
+            completed_by = EXCLUDED.completed_by,
+            title = EXCLUDED.title,
+            description = EXCLUDED.description,
+            due_date = EXCLUDED.due_date,
+            due_time = EXCLUDED.due_time,
+            amount = EXCLUDED.amount,
+            currency = EXCLUDED.currency,
+            category = EXCLUDED.category,
+            completed_dates = EXCLUDED.completed_dates,
+            recurrence = EXCLUDED.recurrence,
+            recurrence_day = EXCLUDED.recurrence_day,
+            assigned_to = EXCLUDED.assigned_to
           RETURNING *;
         `;
         if (updateRes.rows.length > 0) {
@@ -285,39 +312,41 @@ function toPgTextArray(arr: any): string {
     }
 
     // Update in-memory store
+    const updatedRecord: DBTask = {
+      ...existingTask,
+      title,
+      description,
+      due_date,
+      due_time,
+      amount: amount !== null ? amount : undefined,
+      currency,
+      category,
+      recurrence,
+      recurrence_day: recurrence_day !== null ? Number(recurrence_day) : undefined,
+      status,
+      completed_dates,
+      completed_at: completedAt || undefined,
+      completed_by: completedBy || undefined,
+      calendar_id,
+      assigned_to
+    };
+
     const memIndex = memoryStore.tasks.findIndex(t => t.id === id);
     if (memIndex !== -1) {
-      memoryStore.tasks[memIndex] = {
-        ...memoryStore.tasks[memIndex],
-        ...existingTask,
-        title,
-        description,
-        due_date,
-        due_time,
-        amount: amount !== null ? amount : undefined,
-        currency,
-        category,
-        recurrence,
-        recurrence_day: recurrence_day ? Number(recurrence_day) : undefined,
-        status,
-        completed_dates,
-        completed_at: completedAt || undefined,
-        completed_by: completedBy || undefined,
-        assigned_to
-      };
-      existingTask = memoryStore.tasks[memIndex];
-    } else if (existingTask) {
-      memoryStore.tasks.push(existingTask);
+      memoryStore.tasks[memIndex] = updatedRecord;
+    } else {
+      memoryStore.tasks.push(updatedRecord);
     }
+    existingTask = updatedRecord;
 
     // Send email notification if marked as completed, reopened, or edited
     if (notificationType) {
       let calendarName = 'Hogar & Finanzas Compartidas';
       let memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
 
-      if (hasPostgres && existingTask.calendar_id) {
+      if (hasPostgres && calendar_id) {
         try {
-          const calRes = await sql`SELECT * FROM app_calendars WHERE id = ${existingTask.calendar_id} LIMIT 1;`;
+          const calRes = await sql`SELECT * FROM app_calendars WHERE id = ${calendar_id} LIMIT 1;`;
           if (calRes.rows.length > 0) {
             calendarName = calRes.rows[0].name || calendarName;
             const dbEmails = calRes.rows[0].member_emails;
@@ -330,6 +359,10 @@ function toPgTextArray(arr: any): string {
         } catch (err) {
           console.error('Error fetching calendar in PATCH /api/tasks:', err);
         }
+      }
+
+      if (!memberEmails || memberEmails.length === 0) {
+        memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
       }
 
       try {
@@ -350,20 +383,82 @@ function toPgTextArray(arr: any): string {
   }
 
   if (req.method === 'DELETE') {
-    const id = (req.query.id as string) || (req.body?.id as string) || (req.query.taskId as string);
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    body = body || {};
+
+    const id = (req.query.id as string) || body.id || (req.query.taskId as string);
     if (!id || typeof id !== 'string') {
       return res.status(400).json({ error: 'Valid task ID is required' });
     }
 
+    let taskToDelete: DBTask | undefined = body.task;
+
     if (hasPostgres) {
       try {
+        const check = await sql`SELECT * FROM app_tasks WHERE id = ${id} LIMIT 1;`;
+        if (check.rows.length > 0) {
+          taskToDelete = { ...(check.rows[0] as DBTask), ...(taskToDelete || {}) };
+        }
         await sql`DELETE FROM app_tasks WHERE id = ${id};`;
       } catch (err) {
         console.error('Postgres error in DELETE /api/tasks:', err);
       }
     }
 
+    if (!taskToDelete) {
+      taskToDelete = memoryStore.tasks.find(t => t.id === id);
+    }
+
     memoryStore.tasks = memoryStore.tasks.filter(t => t.id !== id);
+
+    // Send email notification for task deletion!
+    if (taskToDelete && taskToDelete.title) {
+      let calendarName = 'Hogar & Finanzas Compartidas';
+      let memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
+
+      const calId = taskToDelete.calendar_id || 'cal-shared-home';
+      if (hasPostgres && calId) {
+        try {
+          const calRes = await sql`SELECT * FROM app_calendars WHERE id = ${calId} LIMIT 1;`;
+          if (calRes.rows.length > 0) {
+            calendarName = calRes.rows[0].name || calendarName;
+            const dbEmails = calRes.rows[0].member_emails;
+            if (Array.isArray(dbEmails) && dbEmails.length > 0) {
+              memberEmails = dbEmails;
+            } else if (typeof dbEmails === 'string' && dbEmails.length > 0) {
+              memberEmails = dbEmails.replace(/[{}]/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching calendar in DELETE /api/tasks:', err);
+        }
+      }
+
+      if (!memberEmails || memberEmails.length === 0) {
+        memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
+      }
+
+      try {
+        const emailRes = await notifyCalendarMembers({
+          type: 'DELETED',
+          task: taskToDelete,
+          calendarName,
+          recipients: memberEmails,
+          actionBy: body.deleted_by || body.deletedBy || 'Jonathan o Michelle'
+        });
+        console.log('Task DELETED email result in /api/tasks:', emailRes);
+      } catch (e) {
+        console.error('Error sending DELETED email:', e);
+      }
+    }
+
     return res.status(200).json({ success: true, message: 'Task deleted' });
   }
 

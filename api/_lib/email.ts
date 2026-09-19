@@ -70,7 +70,7 @@ export function getEmailConfig() {
 }
 
 export interface SendTaskEmailOptions {
-  type: 'CREATED' | 'COMPLETED' | 'REOPENED' | 'EDITED' | 'REMINDER';
+  type: 'CREATED' | 'COMPLETED' | 'REOPENED' | 'EDITED' | 'DELETED' | 'REMINDER';
   task?: DBTask;
   tasks?: DBTask[];
   calendarName?: string;
@@ -453,6 +453,54 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
             <tr>
               <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">💵 Monto:</td>
               <td style="color: #34d399; padding: 6px 0; font-weight: 700; font-size: 16px;">$${Number(task.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${task.currency || 'USD'}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">🏷️ Categoría:</td>
+              <td style="color: #e2e8f0; padding: 6px 0; font-size: 14px; text-transform: capitalize;">${task.category}</td>
+            </tr>
+          </table>
+        </div>
+
+        <p style="color: #94a3b8; font-size: 13px; text-align: center; margin-top: 24px;">
+          Notificación enviada a todos los miembros (${primaryRecipients.join(', ')}).
+        </p>
+      </div>
+    `;
+  } else if (type === 'DELETED' && task) {
+    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+    subject = isRecurring
+      ? `🗑️ Tarea repetitiva eliminada: ${task.title}`
+      : `🗑️ Tarea eliminada: ${task.title}`;
+    htmlContent = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="color: #f43f5e; margin: 0; font-size: 24px;">🗑️ Tarea Eliminada</h1>
+          <p style="color: #94a3b8; font-size: 14px; margin-top: 4px;">Calendario: <strong>${calendarName}</strong></p>
+        </div>
+        
+        <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; border-left: 4px solid #f43f5e; margin-bottom: 20px;">
+          <h2 style="color: #ffffff; margin-top: 0; font-size: 20px; text-decoration: line-through; text-decoration-color: #f43f5e;">${task.title}</h2>
+          ${task.description ? `<p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">${task.description}</p>` : ''}
+          
+          <table style="width: 100%; margin-top: 16px; border-collapse: collapse;">
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">👤 Eliminada por:</td>
+              <td style="color: #f43f5e; padding: 6px 0; font-weight: 700; font-size: 15px;">${actionBy || 'Un miembro'}</td>
+            </tr>
+            ${task.due_date ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">📅 Fecha asignada:</td>
+              <td style="color: #f1f5f9; padding: 6px 0; font-weight: 600; font-size: 14px;">${task.due_date} ${task.due_time ? `(${task.due_time})` : ''}</td>
+            </tr>` : ''}
+            ${isRecurring ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">🔄 Frecuencia:</td>
+              <td style="color: #c084fc; padding: 6px 0; font-size: 14px;">Era tarea repetitiva (${task.recurrence}). Ha sido removida de todas las repeticiones.</td>
+            </tr>` : ''}
+            ${task.amount ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">💵 Monto que tenía:</td>
+              <td style="color: #e2e8f0; padding: 6px 0; font-size: 14px;">$${Number(task.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${task.currency || 'USD'}</td>
             </tr>` : ''}
             <tr>
               <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">🏷️ Categoría:</td>

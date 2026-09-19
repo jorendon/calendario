@@ -125,4 +125,45 @@ describe('task and user permissions logic', () => {
     expect(editedTask.description).toBe('Tarifa actualizada');
     expect(editedTask.recurrence).toBe('MONTHLY');
   });
+
+  it('filters out deleted task and prepares deletion notification', () => {
+    const tasksList: Task[] = [
+      {
+        id: 'task-1',
+        calendarId: calendar.id,
+        title: 'Comprar víveres',
+        dueDate: '2026-09-20',
+        category: 'chores',
+        status: 'PENDING',
+        createdBy: 'Jonathan.rendon@gmail.com',
+        createdAt: '2026-09-01T00:00:00Z'
+      },
+      {
+        id: 'task-2',
+        calendarId: calendar.id,
+        title: 'Pagar seguro',
+        dueDate: '2026-09-22',
+        category: 'bills',
+        status: 'PENDING',
+        createdBy: 'michrotel@gmail.com',
+        createdAt: '2026-09-01T00:00:00Z'
+      }
+    ];
+
+    const taskToDelete = tasksList.find(t => t.id === 'task-1');
+    const remainingTasks = tasksList.filter(t => t.id !== 'task-1');
+
+    expect(remainingTasks.length).toBe(1);
+    expect(remainingTasks[0].id).toBe('task-2');
+    expect(taskToDelete?.title).toBe('Comprar víveres');
+
+    const notificationPayload = {
+      type: 'DELETED',
+      task: taskToDelete,
+      recipients: calendar.memberEmails
+    };
+    expect(notificationPayload.type).toBe('DELETED');
+    expect(notificationPayload.recipients).toContain('Jonathan.rendon@gmail.com');
+    expect(notificationPayload.recipients).toContain('michrotel@gmail.com');
+  });
 });
