@@ -103,13 +103,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         memberEmails = inMemCal.member_emails;
       }
 
-      notifyCalendarMembers({
-        type: 'COMPLETED',
-        task: existingTask,
-        calendarName,
-        recipients: memberEmails,
-        actionBy: completed_by || 'Jonathan o Michelle'
-      }).catch(e => console.error('Error sending completion email:', e));
+      try {
+        await notifyCalendarMembers({
+          type: 'COMPLETED',
+          task: existingTask,
+          calendarName,
+          recipients: memberEmails,
+          actionBy: completed_by || 'Jonathan o Michelle'
+        });
+      } catch (e) {
+        console.error('Error sending completion email:', e);
+      }
     }
 
     return res.status(200).json(existingTask);

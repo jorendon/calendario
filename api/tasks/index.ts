@@ -113,14 +113,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       memberEmails = inMemCal.member_emails;
     }
 
-    // Send email notification to all members of the calendar
-    notifyCalendarMembers({
-      type: 'CREATED',
-      task: newTask,
-      calendarName,
-      recipients: memberEmails,
-      actionBy: created_by
-    }).catch(e => console.error('Error sending creation email:', e));
+    // Send email notification to all members of the calendar (must await in serverless so Vercel does not freeze execution)
+    try {
+      await notifyCalendarMembers({
+        type: 'CREATED',
+        task: newTask,
+        calendarName,
+        recipients: memberEmails,
+        actionBy: created_by
+      });
+    } catch (e) {
+      console.error('Error sending creation email:', e);
+    }
 
     return res.status(201).json(newTask);
   }
