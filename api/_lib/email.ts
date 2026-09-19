@@ -2,19 +2,56 @@ import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 import { DBTask } from './types';
 
+function getSmtpUser(): string | undefined {
+  return (
+    process.env.SMTP_USER ||
+    process.env.SMTP_USERNAME ||
+    process.env.GMAIL_USER ||
+    process.env.EMAIL_USER ||
+    process.env.MAIL_USER ||
+    process.env.EMAIL_USERNAME
+  )?.trim();
+}
+
+function getSmtpPass(): string | undefined {
+  return (
+    process.env.SMTP_PASS ||
+    process.env.SMTP_PASSWORD ||
+    process.env.GMAIL_PASS ||
+    process.env.GMAIL_PASSWORD ||
+    process.env.EMAIL_PASS ||
+    process.env.EMAIL_PASSWORD ||
+    process.env.MAIL_PASS ||
+    process.env.MAIL_PASSWORD
+  )?.replace(/\s+/g, '');
+}
+
+function getResendKey(): string | undefined {
+  return (
+    process.env.RESEND_API_KEY ||
+    process.env.RESEND_KEY ||
+    process.env.RESEND_TOKEN
+  )?.trim();
+}
+
 export function getEmailConfig() {
-  const smtpUser = process.env.SMTP_USER?.trim();
-  const smtpPass = process.env.SMTP_PASS?.replace(/\s+/g, '');
-  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  const smtpUser = getSmtpUser();
+  const smtpPass = getSmtpPass();
+  const resendApiKey = getResendKey();
   const smtpHost = process.env.SMTP_HOST?.trim() || 'smtp.gmail.com';
   const smtpPort = Number(process.env.SMTP_PORT) || 465;
 
   const isSmtp = Boolean(smtpUser && smtpPass);
   const isResend = Boolean(resendApiKey);
 
+  const detectedEnvKeys = Object.keys(process.env).filter(key =>
+    /smtp|mail|resend|gmail/i.test(key)
+  );
+
   return {
     isConfigured: isSmtp || isResend,
     provider: (isSmtp ? 'smtp' : isResend ? 'resend' : 'none') as 'smtp' | 'resend' | 'none',
+    detectedEnvKeys,
     smtp: {
       hasUser: Boolean(smtpUser),
       hasPass: Boolean(smtpPass),
@@ -54,9 +91,9 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
     };
   }
 
-  const smtpUser = process.env.SMTP_USER?.trim();
-  const smtpPass = process.env.SMTP_PASS?.replace(/\s+/g, '');
-  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  const smtpUser = getSmtpUser();
+  const smtpPass = getSmtpPass();
+  const resendApiKey = getResendKey();
 
   // 1. Prefer SMTP (Gmail / Custom SMTP)
   if (config.provider === 'smtp' && smtpUser && smtpPass) {

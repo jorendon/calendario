@@ -154,6 +154,16 @@ export const EmailDiagnosticsModal: React.FC<EmailDiagnosticsModalProps> = ({
                     : `Remitente configurado: ${config.resend.from}`
                   : 'Para que los correos lleguen a Jonathan y Michelle, debes ingresar las variables de entorno en tu panel de Vercel.'}
               </p>
+              {config?.detectedEnvKeys && config.detectedEnvKeys.length > 0 ? (
+                <p className="text-[11px] text-indigo-300 mt-1">
+                  Variables de correo encontradas en el servidor:{' '}
+                  <strong>{config.detectedEnvKeys.join(', ')}</strong>
+                </p>
+              ) : !isConfigured ? (
+                <p className="text-[11px] text-amber-300/90 mt-1">
+                  No se detectó ninguna variable de correo en el servidor. Asegúrate de marcarlas para el entorno <strong>Production</strong> en Vercel.
+                </p>
+              ) : null}
             </div>
           </div>
 
