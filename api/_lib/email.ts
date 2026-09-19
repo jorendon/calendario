@@ -194,11 +194,43 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
       const data = await response.json();
 
       if (!response.ok || data.error) {
-        console.error('Resend API returned error:', data.error || data);
+        console.warn('Resend batch sending returned warning/error:', data.error || data);
+        // Fallback: If sending to multiple recipients failed (e.g. testing domain restrictions), try individually
+        let anySent = false;
+        let lastError = data.message || data.error?.message || JSON.stringify(data);
+        if (to.length > 1) {
+          for (const singleRecipient of to) {
+            try {
+              const singleRes = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${resendApiKey}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  from: fromAddress,
+                  to: [singleRecipient],
+                  subject,
+                  html
+                })
+              });
+              const singleData = await singleRes.json();
+              if (singleRes.ok && !singleData.error) {
+                anySent = true;
+                console.log(`Email sent individually to ${singleRecipient} via Resend:`, singleData.id);
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+        if (anySent) {
+          return { sent: true, provider: 'resend', note: 'Sent individually' };
+        }
         return {
           sent: false,
           provider: 'resend',
-          error: data.message || data.error?.message || JSON.stringify(data),
+          error: lastError,
           details: data
         };
       }
@@ -217,17 +249,27 @@ export async function sendDirectEmail(to: string[], subject: string, html: strin
 export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
   const { type, task, tasks, calendarName = 'Hogar & Finanzas Compartidas', recipients, actionBy } = options;
 
-  if (!recipients || recipients.length === 0) {
-    console.warn('No recipients specified for email notification.');
-    return { sent: false, reason: 'no-recipients' };
+  let rawList: string[] = [];
+  if (Array.isArray(recipients)) {
+    rawList = recipients;
+  } else if (typeof recipients === 'string') {
+    rawList = (recipients as string).replace(/[{}]/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, ''));
   }
 
-  const primaryRecipients = recipients.filter(Boolean);
+  const primaryRecipients = Array.from(new Set(rawList.filter(Boolean)));
+
+  if (primaryRecipients.length === 0) {
+    primaryRecipients.push('Jonathan.rendon@gmail.com', 'michrotel@gmail.com');
+  }
+
   let subject = '';
   let htmlContent = '';
 
   if (type === 'CREATED' && task) {
-    subject = `📌 Nueva tarea creada: ${task.title}`;
+    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+    subject = isRecurring
+      ? `📌 Nueva tarea repetitiva creada: ${task.title}`
+      : `📌 Nueva tarea creada: ${task.title}`;
     htmlContent = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 16px;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -244,6 +286,11 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
               <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">📅 Fecha límite:</td>
               <td style="color: #f1f5f9; padding: 6px 0; font-weight: 600; font-size: 14px;">${task.due_date} ${task.due_time ? `(${task.due_time})` : ''}</td>
             </tr>
+            ${isRecurring ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">🔄 Frecuencia:</td>
+              <td style="color: #c084fc; padding: 6px 0; font-weight: 600; font-size: 14px;">${task.recurrence}${task.recurrence_day ? ` (Día ${task.recurrence_day})` : ''}</td>
+            </tr>` : ''}
             ${task.amount ? `
             <tr>
               <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">💵 Monto / Pago:</td>
@@ -266,7 +313,10 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
       </div>
     `;
   } else if (type === 'COMPLETED' && task) {
-    subject = `✅ Tarea completada: ${task.title}`;
+    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+    subject = isRecurring
+      ? `✅ Tarea repetitiva completada: ${task.title}`
+      : `✅ Tarea completada: ${task.title}`;
     htmlContent = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 16px;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -283,6 +333,11 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
               <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">✨ Marcada como lista por:</td>
               <td style="color: #34d399; padding: 6px 0; font-weight: 700; font-size: 15px;">${actionBy || task.completed_by || 'Un miembro'}</td>
             </tr>
+            ${isRecurring ? `
+            <tr>
+              <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">🔄 Tipo:</td>
+              <td style="color: #c084fc; padding: 6px 0; font-size: 14px;">Tarea repetitiva (${task.recurrence}). Se mantendrá en sus siguientes fechas programadas.</td>
+            </tr>` : ''}
             ${task.amount ? `
             <tr>
               <td style="color: #94a3b8; padding: 6px 0; font-size: 14px;">💵 Monto Pagado:</td>

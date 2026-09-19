@@ -49,33 +49,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     body = body || {};
 
-    const {
-      title,
-      description = '',
-      due_date,
-      due_time = '',
-      amount = null,
-      currency = 'USD',
-      category = 'other',
-      calendar_id = 'cal-shared-home',
-      created_by = 'Jonathan.rendon@gmail.com',
-      assigned_to = '',
-      recurrence = 'NONE',
-      recurrence_day = null
-    } = body;
+    const title = body.title;
+    const description = body.description || '';
+    const due_date = body.due_date || body.dueDate;
+    const due_time = body.due_time !== undefined ? body.due_time : (body.dueTime || '');
+    const amount = body.amount !== undefined && body.amount !== null && body.amount !== '' ? Number(body.amount) : null;
+    const currency = body.currency || 'USD';
+    const category = body.category || 'other';
+    const calendar_id = body.calendar_id || body.calendarId || 'cal-shared-home';
+    const created_by = body.created_by || body.createdBy || 'Jonathan.rendon@gmail.com';
+    const assigned_to = body.assigned_to || body.assignedTo || '';
+    const recurrence = body.recurrence || 'NONE';
+    const recurrence_day = body.recurrence_day !== undefined ? body.recurrence_day : (body.recurrenceDay || null);
 
     if (!title || !due_date) {
       return res.status(400).json({ error: 'Title and due_date are required' });
     }
 
     const newTask: DBTask = {
-      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: body.id || `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       calendar_id,
       title,
       description,
       due_date,
       due_time,
-      amount: amount ? Number(amount) : undefined,
+      amount: amount !== null ? amount : undefined,
       currency,
       category,
       recurrence,
@@ -101,13 +99,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ${newTask.due_time || ''}, ${newTask.amount || null}, ${newTask.currency || 'USD'}, ${newTask.category},
             ${newTask.recurrence || 'NONE'}, ${newTask.recurrence_day || null}, ${newTask.completed_dates as any || []},
             ${newTask.status}, ${newTask.created_by}, ${newTask.assigned_to || ''}, ${newTask.created_at}
-          );
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            description = EXCLUDED.description,
+            due_date = EXCLUDED.due_date,
+            due_time = EXCLUDED.due_time,
+            amount = EXCLUDED.amount,
+            category = EXCLUDED.category,
+            recurrence = EXCLUDED.recurrence,
+            recurrence_day = EXCLUDED.recurrence_day;
         `;
 
         const calRes = await sql`SELECT * FROM app_calendars WHERE id = ${calendar_id} LIMIT 1;`;
         if (calRes.rows.length > 0) {
-          calendarName = calRes.rows[0].name;
-          memberEmails = calRes.rows[0].member_emails || memberEmails;
+          calendarName = calRes.rows[0].name || calendarName;
+          const dbEmails = calRes.rows[0].member_emails;
+          if (Array.isArray(dbEmails) && dbEmails.length > 0) {
+            memberEmails = dbEmails;
+          } else if (typeof dbEmails === 'string' && dbEmails.length > 0) {
+            memberEmails = dbEmails.replace(/[{}]/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+          }
         }
       } catch (err) {
         console.error('Postgres error in POST /api/tasks:', err);
@@ -115,8 +127,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Always update in-memory cache
-    memoryStore.tasks.push(newTask);
-    const inMemCal = memoryStore.calendars.find(c => c.id === calendar_id);
+    const existingMemIndex = memoryStore.tasks.findIndex(t => t.id === newTask.id);
+    if (existingMemIndex !== -1) {
+      memoryStore.tasks[existingMemIndex] = newTask;
+    } else {
+      memoryStore.tasks.push(newTask);
+    }
+
     if (!memberEmails || memberEmails.length === 0) {
       memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
     }

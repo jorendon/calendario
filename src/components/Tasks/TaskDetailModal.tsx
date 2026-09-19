@@ -1,6 +1,6 @@
 import React from 'react';
 import { Task } from '../../types';
-import { X, CheckCircle2, Circle, Trash2, Calendar, Clock, DollarSign, User, Send, Repeat } from 'lucide-react';
+import { X, CheckCircle2, Circle, Trash2, Calendar, Clock, DollarSign, User, Send, Repeat, Edit3 } from 'lucide-react';
 import { formatFullDate, formatCurrency, formatRecurrenceLabel } from '../../utils/dateUtils';
 
 interface TaskDetailModalProps {
@@ -10,6 +10,7 @@ interface TaskDetailModalProps {
   onClose: () => void;
   onToggleStatus: (taskId: string, occurrenceDate?: string) => void;
   onDelete: (taskId: string) => void;
+  onEdit?: (task: Task) => void;
 }
 
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
@@ -18,7 +19,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   isOpen,
   onClose,
   onToggleStatus,
-  onDelete
+  onDelete,
+  onEdit
 }) => {
   if (!isOpen || !task) return null;
 
@@ -146,17 +148,34 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
           {/* Action buttons */}
           <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-            <button
-              onClick={handleDelete}
-              className="flex items-center space-x-1.5 text-xs text-rose-400 hover:text-rose-300 p-2 rounded-lg hover:bg-rose-950/40 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Eliminar</span>
-            </button>
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <button
+                onClick={handleDelete}
+                className="flex items-center space-x-1.5 text-xs text-rose-400 hover:text-rose-300 px-2.5 py-2 rounded-xl hover:bg-rose-950/40 transition-colors"
+                title="Eliminar tarea"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Eliminar</span>
+              </button>
+
+              {onEdit && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onEdit(task);
+                  }}
+                  className="flex items-center space-x-1.5 text-xs text-amber-400 hover:text-amber-300 px-2.5 py-2 rounded-xl hover:bg-amber-950/40 transition-colors font-medium border border-amber-500/20"
+                  title={task.recurrence && task.recurrence !== 'NONE' ? "Editar (se aplicará a todas las repeticiones)" : "Editar tarea"}
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Editar</span>
+                </button>
+              )}
+            </div>
 
             <button
               onClick={handleToggle}
-              className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all active:scale-95 ${
+              className={`flex items-center space-x-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all active:scale-95 ${
                 isDone
                   ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
                   : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30'
@@ -165,12 +184,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               {isDone ? (
                 <>
                   <Circle className="w-4 h-4" />
-                  <span>Reabrir tarea</span>
+                  <span>Reabrir</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>¡Marcar como LISTA!</span>
+                  <span>¡Marcar LISTA!</span>
                 </>
               )}
             </button>

@@ -258,10 +258,11 @@ export function useTasks() {
     showToast(`Tarea "${newTask.title}" creada. Correo enviado a los miembros.`);
 
     try {
-      await fetch('/api/tasks', {
+      const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: newTask.id,
           calendar_id: newTask.calendarId,
           title: newTask.title,
           description: newTask.description,
@@ -276,6 +277,16 @@ export function useTasks() {
           assigned_to: newTask.assignedTo
         })
       });
+      if (res.ok) {
+        const saved = await res.json();
+        if (saved && saved.id) {
+          setTasks(prev => prev.map(t => (t.id === newTask.id ? {
+            ...t,
+            id: saved.id,
+            completedDates: saved.completed_dates || t.completedDates || []
+          } : t)));
+        }
+      }
     } catch {
       // Cached locally
     }
@@ -379,7 +390,14 @@ export function useTasks() {
       await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
+        body: JSON.stringify({
+          ...updates,
+          due_date: updates.dueDate,
+          due_time: updates.dueTime,
+          recurrence_day: updates.recurrenceDay,
+          calendar_id: updates.calendarId,
+          assigned_to: updates.assignedTo
+        })
       });
     } catch {
       // Cached locally

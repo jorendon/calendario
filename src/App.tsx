@@ -35,6 +35,7 @@ export const App: React.FC = () => {
     notificationMsg,
     createTask,
     toggleTaskStatus,
+    updateTask,
     deleteTask,
     createCategory,
     createCalendar,
@@ -48,6 +49,7 @@ export const App: React.FC = () => {
 
   // Modals state
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const [selectedTaskForDetail, setSelectedTaskForDetail] = useState<Task | null>(null);
   const [selectedOccurrenceDate, setSelectedOccurrenceDate] = useState<string | undefined>(undefined);
   const [initialTaskDate, setInitialTaskDate] = useState<string | undefined>(undefined);
@@ -208,8 +210,13 @@ export const App: React.FC = () => {
       {/* Modals */}
       <TaskModal
         isOpen={isNewTaskOpen}
-        onClose={() => setIsNewTaskOpen(false)}
+        onClose={() => {
+          setIsNewTaskOpen(false);
+          setTaskToEdit(null);
+        }}
         onSubmit={createTask}
+        onUpdate={updateTask}
+        taskToEdit={taskToEdit}
         calendars={calendars}
         categories={categories}
         onOpenNewCategory={() => setIsCategoryModalOpen(true)}
@@ -228,6 +235,10 @@ export const App: React.FC = () => {
         }}
         onToggleStatus={toggleTaskStatus}
         onDelete={deleteTask}
+        onEdit={task => {
+          setTaskToEdit(task);
+          setIsNewTaskOpen(true);
+        }}
       />
 
       <CategoryModal

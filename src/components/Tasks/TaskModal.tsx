@@ -6,6 +6,8 @@ interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (taskData: Omit<Task, 'id' | 'createdAt' | 'status'>) => void;
+  onUpdate?: (taskId: string, updates: Partial<Task>) => void;
+  taskToEdit?: Task | null;
   calendars: CalendarType[];
   categories: Category[];
   onOpenNewCategory: () => void;
@@ -18,6 +20,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
+  onUpdate,
+  taskToEdit,
   calendars,
   categories,
   onOpenNewCategory,
@@ -38,44 +42,80 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      const today = new Date().toISOString().split('T')[0];
-      const targetDate = initialDate || today;
-      setDueDate(targetDate);
-      
-      const dayNum = Number(targetDate.split('-')[2]) || 25;
-      setRecurrenceDay(dayNum);
+      if (taskToEdit) {
+        setTitle(taskToEdit.title || '');
+        setDescription(taskToEdit.description || '');
+        setDueDate(taskToEdit.dueDate || '');
+        setDueTime(taskToEdit.dueTime || '');
+        setAmount(taskToEdit.amount !== undefined && taskToEdit.amount !== null ? String(taskToEdit.amount) : '');
+        setCurrency(taskToEdit.currency || 'USD');
+        setCategory(taskToEdit.category || 'rent');
+        setRecurrence(taskToEdit.recurrence || 'NONE');
+        setRecurrenceDay(taskToEdit.recurrenceDay || Number(taskToEdit.dueDate?.split('-')[2]) || 25);
+        setCalendarId(taskToEdit.calendarId || calendars[0]?.id || 'cal-shared-home');
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        const targetDate = initialDate || today;
+        setTitle('');
+        setDescription('');
+        setAmount('');
+        setDueDate(targetDate);
+        setDueTime('');
+        setRecurrence('NONE');
+        
+        const dayNum = Number(targetDate.split('-')[2]) || 25;
+        setRecurrenceDay(dayNum);
 
-      if (defaultCalendarId && defaultCalendarId !== 'all') {
-        setCalendarId(defaultCalendarId);
-      } else if (calendars.length > 0) {
-        setCalendarId(calendars[0].id);
-      }
+        if (defaultCalendarId && defaultCalendarId !== 'all') {
+          setCalendarId(defaultCalendarId);
+        } else if (calendars.length > 0) {
+          setCalendarId(calendars[0].id);
+        }
 
-      if (categories.length > 0) {
-        setCategory(categories[0].id);
+        if (categories.length > 0) {
+          setCategory(categories[0].id);
+        }
       }
     }
-  }, [isOpen, initialDate, defaultCalendarId, calendars, categories]);
+  }, [isOpen, taskToEdit, initialDate, defaultCalendarId, calendars, categories]);
 
   if (!isOpen) return null;
+
+  const isEditing = Boolean(taskToEdit);
+  const isRecurring = recurrence !== 'NONE' || (taskToEdit?.recurrence && taskToEdit.recurrence !== 'NONE');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !dueDate) return;
 
-    onSubmit({
-      calendarId,
-      title: title.trim(),
-      description: description.trim() || undefined,
-      dueDate,
-      dueTime: dueTime || undefined,
-      amount: amount ? Number(amount) : undefined,
-      currency,
-      category,
-      recurrence,
-      recurrenceDay: recurrence === 'MONTHLY' ? recurrenceDay : undefined,
-      createdBy: activeUserEmail
-    });
+    if (isEditing && taskToEdit && onUpdate) {
+      onUpdate(taskToEdit.id, {
+        calendarId,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        dueDate,
+        dueTime: dueTime || undefined,
+        amount: amount ? Number(amount) : undefined,
+        currency,
+        category,
+        recurrence,
+        recurrenceDay: recurrence === 'MONTHLY' ? recurrenceDay : undefined
+      });
+    } else {
+      onSubmit({
+        calendarId,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        dueDate,
+        dueTime: dueTime || undefined,
+        amount: amount ? Number(amount) : undefined,
+        currency,
+        category,
+        recurrence,
+        recurrenceDay: recurrence === 'MONTHLY' ? recurrenceDay : undefined,
+        createdBy: activeUserEmail
+      });
+    }
 
     setTitle('');
     setDescription('');
@@ -90,10 +130,21 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-850 flex-shrink-0">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
-              <Calendar className="w-4 h-4" />
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              isEditing ? 'bg-amber-600/20 border border-amber-500/40 text-amber-400' : 'bg-indigo-600/30 border border-indigo-500/40 text-indigo-400'
+            }`}>
+              {isRecurring ? <Repeat className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
             </div>
-            <h3 className="text-base font-bold text-white">Nueva Tarea o Pago</h3>
+            <div>
+              <h3 className="text-base font-bold text-white">
+                {isEditing ? (isRecurring ? 'Editar Tarea Repetitiva' : 'Editar Tarea') : 'Nueva Tarea o Pago'}
+              </h3>
+              {isEditing && isRecurring && (
+                <p className="text-[11px] text-purple-300">
+                  Se actualizará en todas sus repeticiones
+                </p>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -105,6 +156,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm overflow-y-auto custom-scrollbar flex-1">
+          {isEditing && isRecurring && (
+            <div className="bg-purple-950/40 border border-purple-500/30 rounded-xl p-3 flex items-start space-x-2.5 text-xs text-purple-200">
+              <Repeat className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-400" />
+              <p>
+                <strong>Nota sobre repetición:</strong> Esta tarea es repetitiva. Cualquier cambio que realices aquí (título, notas, monto, fecha/día o frecuencia) se reflejará automáticamente en <strong>todas sus repeticiones</strong> del calendario.
+              </p>
+            </div>
+          )}
           {/* Title */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
@@ -282,7 +341,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           <div className="bg-indigo-950/40 border border-indigo-500/20 rounded-xl p-3 flex items-start space-x-2.5 text-xs text-indigo-300">
             <Send className="w-4 h-4 flex-shrink-0 mt-0.5 text-indigo-400" />
             <p>
-              Al crear esta tarea, se enviará un correo automático a los miembros de este calendario informando la tarea.
+              {isEditing
+                ? 'Los miembros del calendario verán los cambios actualizados automáticamente.'
+                : 'Al crear esta tarea, se enviará un correo automático a los miembros de este calendario informando la tarea.'}
             </p>
           </div>
 
@@ -297,9 +358,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all"
+              className={`px-5 py-2 text-white rounded-xl text-xs font-bold shadow-lg transition-all ${
+                isEditing
+                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 shadow-amber-600/30'
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-indigo-600/30'
+              }`}
             >
-              Guardar Tarea
+              {isEditing ? 'Guardar Cambios' : 'Guardar Tarea'}
             </button>
           </div>
         </form>
