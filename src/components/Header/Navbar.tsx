@@ -8,7 +8,9 @@ import {
   RefreshCw,
   UserCheck,
   CheckCircle2,
-  LogOut
+  LogOut,
+  Upload,
+  Mail
 } from 'lucide-react';
 import { User } from '../../types';
 
@@ -25,6 +27,8 @@ interface NavbarProps {
   onOpenNewTask: () => void;
   onOpenUserManagement: () => void;
   onOpenGoogleSync: () => void;
+  onOpenJsonImport: () => void;
+  onOpenEmailDiagnostics: () => void;
   onOpenLogin: () => void;
   onLogout: () => void;
 }
@@ -42,6 +46,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewTask,
   onOpenUserManagement,
   onOpenGoogleSync,
+  onOpenJsonImport,
+  onOpenEmailDiagnostics,
   onOpenLogin,
   onLogout
 }) => {
@@ -128,16 +134,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Right: Actions, Google Sync, Users, New Task */}
+        {/* Right: Actions, Import JSON, Email Status, Users, New Task */}
         <div className="flex items-center justify-between sm:justify-end space-x-2">
-          {/* Google Sync Button */}
+          {/* JSON Tasks Importer Button */}
           <button
-            onClick={onOpenGoogleSync}
-            className="flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
-            title="Importar tareas de Google"
+            onClick={onOpenJsonImport}
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-semibold text-indigo-300 bg-indigo-950/70 hover:bg-indigo-900/80 border border-indigo-500/40 rounded-lg transition-colors shadow-sm"
+            title="Importar tareas desde archivo o texto JSON"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">Google Tasks</span>
+            <Upload className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Importar JSON</span>
+          </button>
+
+          {/* Email Diagnostics Button */}
+          <button
+            onClick={onOpenEmailDiagnostics}
+            className="flex items-center space-x-1 p-1.5 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+            title="Ver estado y probar envío de correos"
+          >
+            <Mail className="w-3.5 h-3.5 text-blue-400" />
           </button>
 
           {/* User selector dropdown / Login button */}
@@ -201,6 +216,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                     >
                       <Users className="w-3.5 h-3.5 text-indigo-400" />
                       <span>Administrar usuarios</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        onOpenEmailDiagnostics();
+                      }}
+                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-700 flex items-center space-x-2"
+                    >
+                      <Mail className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Diagnóstico de Correos</span>
                     </button>
                     <button
                       onClick={() => {

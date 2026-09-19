@@ -1,9 +1,37 @@
 import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { DBTask } from './types';
 
+// Resend Configuration
 const resendApiKey = process.env.RESEND_API_KEY;
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
-const fromEmail = process.env.EMAIL_FROM || 'Calendario Compartido <onboarding@resend.dev>';
+
+// SMTP / Gmail Configuration
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS?.replace(/\s+/g, ''); // Remove spaces from Google App Passwords
+const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+const smtpPort = Number(process.env.SMTP_PORT) || 465;
+
+export function getEmailConfig() {
+  const isSmtp = Boolean(smtpUser && smtpPass);
+  const isResend = Boolean(resendApiKey);
+  
+  return {
+    isConfigured: isSmtp || isResend,
+    provider: isSmtp ? 'smtp' : isResend ? 'resend' : 'none',
+    smtp: {
+      hasUser: Boolean(smtpUser),
+      hasPass: Boolean(smtpPass),
+      user: smtpUser ? smtpUser.replace(/^(.{3}).*(@.*)$/, '$1***$2') : null,
+      host: smtpHost,
+      port: smtpPort
+    },
+    resend: {
+      hasKey: Boolean(resendApiKey),
+      from: process.env.EMAIL_FROM || 'Calendario Compartido <onboarding@resend.dev>'
+    }
+  };
+}
 
 export interface SendTaskEmailOptions {
   type: 'CREATED' | 'COMPLETED' | 'REMINDER';
@@ -14,6 +42,80 @@ export interface SendTaskEmailOptions {
   actionBy?: string;
 }
 
+export async function sendDirectEmail(to: string[], subject: string, html: string) {
+  const config = getEmailConfig();
+
+  if (!config.isConfigured) {
+    console.warn('[EMAIL WARNING] No email provider configured in environment variables (neither SMTP_USER/PASS nor RESEND_API_KEY).');
+    return {
+      sent: false,
+      reason: 'not_configured',
+      message: 'No hay credenciales de correo configuradas en las variables de entorno de Vercel (SMTP_USER/PASS o RESEND_API_KEY).'
+    };
+  }
+
+  // 1. Prefer SMTP (Gmail / Custom SMTP) because it doesn't restrict recipients on free accounts
+  if (config.provider === 'smtp' && smtpUser && smtpPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        }
+      });
+
+      const fromAddress = process.env.EMAIL_FROM || `"Calendario Compartido" <${smtpUser}>`;
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: to.join(', '),
+        subject,
+        html
+      });
+
+      console.log('Email sent successfully via SMTP:', info.messageId);
+      return { sent: true, provider: 'smtp', messageId: info.messageId };
+    } catch (err: any) {
+      console.error('Failed to send email with SMTP:', err);
+      return { sent: false, provider: 'smtp', error: err.message || String(err) };
+    }
+  }
+
+  // 2. Resend provider
+  if (config.provider === 'resend' && resend) {
+    const fromAddress = process.env.EMAIL_FROM || 'Calendario Compartido <onboarding@resend.dev>';
+    try {
+      const response = await resend.emails.send({
+        from: fromAddress,
+        to,
+        subject,
+        html
+      });
+
+      // Resend SDK v4 returns { data, error } instead of throwing!
+      if (response.error) {
+        console.error('Resend API returned error:', response.error);
+        return {
+          sent: false,
+          provider: 'resend',
+          error: response.error.message || JSON.stringify(response.error),
+          details: response.error
+        };
+      }
+
+      console.log('Email sent successfully via Resend:', response.data?.id);
+      return { sent: true, provider: 'resend', id: response.data?.id };
+    } catch (err: any) {
+      console.error('Failed to send email with Resend:', err);
+      return { sent: false, provider: 'resend', error: err.message || String(err) };
+    }
+  }
+
+  return { sent: false, reason: 'unknown' };
+}
+
 export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
   const { type, task, tasks, calendarName = 'Hogar & Finanzas Compartidas', recipients, actionBy } = options;
 
@@ -22,10 +124,9 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
     return { sent: false, reason: 'no-recipients' };
   }
 
+  const primaryRecipients = recipients.filter(Boolean);
   let subject = '';
   let htmlContent = '';
-
-  const primaryRecipients = recipients.filter(Boolean);
 
   if (type === 'CREATED' && task) {
     subject = `📌 Nueva tarea creada: ${task.title}`;
@@ -62,7 +163,7 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
         </div>
 
         <p style="color: #94a3b8; font-size: 13px; text-align: center; margin-top: 24px;">
-          Este correo fue enviado a todos los miembros de este calendario (${primaryRecipients.join(', ')}).
+          Este correo fue enviado a los miembros de este calendario (${primaryRecipients.join(', ')}).
         </p>
       </div>
     `;
@@ -117,12 +218,12 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 16px;">
         <div style="text-align: center; margin-bottom: 24px;">
           <h1 style="color: #f59e0b; margin: 0; font-size: 24px;">☀️ Recordatorio de Tareas y Pagos</h1>
-          <p style="color: #94a3b8; font-size: 14px; margin-top: 4px;">Buenos días Jonathan y Michelle (${today})</p>
+          <p style="color: #94a3b8; font-size: 14px; margin-top: 4px;">Buenos días (${today})</p>
         </div>
 
         <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
           <p style="color: #cbd5e1; font-size: 14px; margin-top: 0;">
-            Tienes <strong>${tasks.length}</strong> tarea(s) que vencen hoy o continúan pendientes. Este recordatorio llegará cada mañana hasta que se completen:
+            Tienes <strong>${tasks.length}</strong> tarea(s) que vencen hoy o continúan pendientes:
           </p>
 
           <table style="width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px;">
@@ -146,23 +247,5 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
     `;
   }
 
-  // If Resend API key is configured, send the actual email
-  if (resend) {
-    try {
-      const response = await resend.emails.send({
-        from: fromEmail,
-        to: primaryRecipients,
-        subject,
-        html: htmlContent
-      });
-      console.log('Email sent successfully via Resend:', response);
-      return { sent: true, provider: 'resend', id: response.data?.id };
-    } catch (error) {
-      console.error('Failed to send email with Resend:', error);
-      return { sent: false, error: String(error) };
-    }
-  } else {
-    console.log(`[LOCAL DEV EMAIL] Subject: "${subject}" to [${primaryRecipients.join(', ')}]`);
-    return { sent: true, provider: 'simulated-local', recipients: primaryRecipients, subject };
-  }
+  return sendDirectEmail(primaryRecipients, subject, htmlContent);
 }

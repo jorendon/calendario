@@ -15,6 +15,8 @@ import { UserManagementModal } from './components/Users/UserManagementModal';
 import { LoginModal } from './components/Auth/LoginModal';
 import { LoginGate } from './components/Auth/LoginGate';
 import { GoogleSyncModal } from './components/GoogleSync/GoogleSyncModal';
+import { JsonImportModal } from './components/Tasks/JsonImportModal';
+import { EmailDiagnosticsModal } from './components/Email/EmailDiagnosticsModal';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
 import { Sparkles } from 'lucide-react';
 
@@ -37,7 +39,8 @@ export const App: React.FC = () => {
     createCategory,
     createCalendar,
     addUser,
-    importGoogleTasks
+    importGoogleTasks,
+    refreshTasks
   } = useTasks();
 
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -52,6 +55,8 @@ export const App: React.FC = () => {
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isGoogleSyncOpen, setIsGoogleSyncOpen] = useState(false);
+  const [isJsonImportOpen, setIsJsonImportOpen] = useState(false);
+  const [isEmailDiagnosticsOpen, setIsEmailDiagnosticsOpen] = useState(false);
 
   const summary = calculateSummary(tasks, currentDate);
 
@@ -129,6 +134,8 @@ export const App: React.FC = () => {
         }}
         onOpenUserManagement={() => setIsUserManagementOpen(true)}
         onOpenGoogleSync={() => setIsGoogleSyncOpen(true)}
+        onOpenJsonImport={() => setIsJsonImportOpen(true)}
+        onOpenEmailDiagnostics={() => setIsEmailDiagnosticsOpen(true)}
         onOpenLogin={() => setIsLoginOpen(true)}
         onLogout={logout}
       />
@@ -249,6 +256,21 @@ export const App: React.FC = () => {
         isOpen={isGoogleSyncOpen}
         onClose={() => setIsGoogleSyncOpen(false)}
         onImport={importGoogleTasks}
+        activeUserEmail={activeUser.email}
+      />
+
+      <JsonImportModal
+        isOpen={isJsonImportOpen}
+        onClose={() => setIsJsonImportOpen(false)}
+        calendars={calendars}
+        selectedCalendarId={selectedCalendarId}
+        onImportSuccess={() => refreshTasks()}
+        activeUserEmail={activeUser.email}
+      />
+
+      <EmailDiagnosticsModal
+        isOpen={isEmailDiagnosticsOpen}
+        onClose={() => setIsEmailDiagnosticsOpen(false)}
         activeUserEmail={activeUser.email}
       />
     </div>
