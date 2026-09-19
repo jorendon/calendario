@@ -294,147 +294,121 @@ export function useTasks() {
 
   // Toggle Task Status (handles non-recurring or specific occurrence date)
   const toggleTaskStatus = async (taskId: string, occurrenceDate?: string) => {
-    let updatedTask: Task | null = null;
+    const currentTask = tasks.find(t => t.id === taskId);
+    if (!currentTask) {
+      console.warn('toggleTaskStatus: Task not found in local state with id', taskId);
+      return;
+    }
+
     const today = new Date().toISOString().split('T')[0];
     const targetDate = occurrenceDate || today;
+    const isRecurring = currentTask.recurrence && currentTask.recurrence !== 'NONE';
 
-    setTasks(prev =>
-      prev.map(task => {
-        if (task.id === taskId) {
-          const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+    let nextCompletedDates = currentTask.completedDates || [];
+    let nextStatus = currentTask.status;
+    let isDone = false;
 
-          if (isRecurring) {
-            // Toggle occurrence date in completedDates
-            const currentCompleted = task.completedDates || [];
-            const isAlreadyCompleted = currentCompleted.includes(targetDate);
+    if (isRecurring) {
+      const isAlreadyCompleted = nextCompletedDates.includes(targetDate);
+      nextCompletedDates = isAlreadyCompleted
+        ? nextCompletedDates.filter(d => d !== targetDate)
+        : [...nextCompletedDates, targetDate];
+      isDone = !isAlreadyCompleted;
+    } else {
+      nextStatus = currentTask.status === 'DONE' ? 'PENDING' : 'DONE';
+      isDone = nextStatus === 'DONE';
+    }
 
-            const nextCompleted = isAlreadyCompleted
-              ? currentCompleted.filter(d => d !== targetDate)
-              : [...currentCompleted, targetDate];
+    if (isDone) {
+      try {
+        confetti({ particleCount: 75, spread: 65, origin: { y: 0.7 } });
+      } catch {
+        // ignore
+      }
+    }
 
-            if (!isAlreadyCompleted) {
-              try {
-                confetti({ particleCount: 75, spread: 65, origin: { y: 0.7 } });
-              } catch {
-                // ignore
-              }
-            }
+    const updatedTask: Task = {
+      ...currentTask,
+      status: nextStatus,
+      completedDates: nextCompletedDates,
+      completedAt: isDone ? new Date().toISOString() : undefined,
+      completedBy: isDone ? (activeUser?.name || activeUser?.email || 'Usuario') : undefined
+    };
 
-            updatedTask = {
-              ...task,
-              completedDates: nextCompleted,
-              completedAt: !isAlreadyCompleted ? new Date().toISOString() : undefined,
-              completedBy: !isAlreadyCompleted ? (activeUser?.name || activeUser?.email || 'Usuario') : undefined
-            };
-            return updatedTask;
-          } else {
-            const nextStatus = task.status === 'DONE' ? 'PENDING' : 'DONE';
-            const isDone = nextStatus === 'DONE';
+    // Update state
+    setTasks(prev => prev.map(t => (t.id === taskId ? updatedTask : t)));
 
-            if (isDone) {
-              try {
-                confetti({ particleCount: 75, spread: 65, origin: { y: 0.7 } });
-              } catch {
-                // ignore
-              }
-            }
-
-            updatedTask = {
-              ...task,
-              status: nextStatus,
-              completedAt: isDone ? new Date().toISOString() : undefined,
-              completedBy: isDone ? (activeUser?.name || activeUser?.email || 'Usuario') : undefined
-            };
-            return updatedTask;
-          }
-        }
-        return task;
-      })
+    showToast(
+      isDone
+        ? `¡Tarea "${updatedTask.title}" marcada como LISTA!`
+        : `Tarea reabierta como pendiente.`
     );
 
-    if (updatedTask) {
-      const currentTask = updatedTask as Task;
-      const isDone = currentTask.recurrence && currentTask.recurrence !== 'NONE'
-        ? currentTask.completedDates?.includes(targetDate)
-        : currentTask.status === 'DONE';
-
-      showToast(
-        isDone
-          ? `¡Tarea "${currentTask.title}" marcada como LISTA!`
-          : `Tarea reabierta como pendiente.`
-      );
-
-      try {
-        await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: taskId,
-            action: isDone ? 'COMPLETED' : 'REOPENED',
-            status: currentTask.status,
-            completed_dates: currentTask.completedDates || [],
-            completed_by: activeUser?.name || activeUser?.email || 'Usuario',
-            title: currentTask.title,
-            description: currentTask.description || '',
-            due_date: currentTask.dueDate,
-            due_time: currentTask.dueTime || '',
-            amount: currentTask.amount,
-            currency: currentTask.currency || 'USD',
-            category: currentTask.category || 'other',
-            recurrence: currentTask.recurrence || 'NONE',
-            recurrence_day: currentTask.recurrenceDay,
-            calendar_id: currentTask.calendarId || 'cal-shared-home',
-            assigned_to: currentTask.assignedTo || ''
-          })
-        });
-      } catch {
-        // Cached locally
-      }
+    try {
+      await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: taskId,
+          action: isDone ? 'COMPLETED' : 'REOPENED',
+          status: updatedTask.status,
+          completed_dates: updatedTask.completedDates || [],
+          completed_by: activeUser?.name || activeUser?.email || 'Usuario',
+          title: updatedTask.title,
+          description: updatedTask.description || '',
+          due_date: updatedTask.dueDate,
+          due_time: updatedTask.dueTime || '',
+          amount: updatedTask.amount,
+          currency: updatedTask.currency || 'USD',
+          category: updatedTask.category || 'other',
+          recurrence: updatedTask.recurrence || 'NONE',
+          recurrence_day: updatedTask.recurrenceDay,
+          calendar_id: updatedTask.calendarId || 'cal-shared-home',
+          assigned_to: updatedTask.assignedTo || ''
+        })
+      });
+    } catch (e) {
+      console.error('Error in toggleTaskStatus fetch:', e);
     }
   };
 
   // Update Task details
   const updateTask = async (taskId: string, updates: Partial<Task>) => {
-    let fullUpdated: Task | null = null;
+    const existing = tasks.find(t => t.id === taskId);
+    const updatedFullTask: Task = existing
+      ? { ...existing, ...updates }
+      : ({ id: taskId, ...updates } as Task);
+
     setTasks(prev =>
-      prev.map(task => {
-        if (task.id === taskId) {
-          fullUpdated = { ...task, ...updates };
-          return fullUpdated;
-        }
-        return task;
-      })
+      prev.map(task => (task.id === taskId ? updatedFullTask : task))
     );
     showToast('Tarea actualizada correctamente.');
 
-    if (fullUpdated) {
-      const cur = fullUpdated as Task;
-      try {
-        await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: taskId,
-            action: 'EDITED',
-            title: cur.title,
-            description: cur.description || '',
-            due_date: cur.dueDate,
-            due_time: cur.dueTime || '',
-            amount: cur.amount,
-            currency: cur.currency || 'USD',
-            category: cur.category || 'other',
-            recurrence: cur.recurrence || 'NONE',
-            recurrence_day: cur.recurrenceDay,
-            status: cur.status || 'PENDING',
-            completed_dates: cur.completedDates || [],
-            calendar_id: cur.calendarId || 'cal-shared-home',
-            assigned_to: cur.assignedTo || '',
-            updated_by: activeUser?.name || activeUser?.email || 'Usuario'
-          })
-        });
-      } catch {
-        // Cached locally
-      }
+    try {
+      await fetch(`/api/tasks?id=${encodeURIComponent(taskId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: taskId,
+          action: 'EDITED',
+          title: updatedFullTask.title,
+          description: updatedFullTask.description || '',
+          due_date: updatedFullTask.dueDate,
+          due_time: updatedFullTask.dueTime || '',
+          amount: updatedFullTask.amount,
+          currency: updatedFullTask.currency || 'USD',
+          category: updatedFullTask.category || 'other',
+          recurrence: updatedFullTask.recurrence || 'NONE',
+          recurrence_day: updatedFullTask.recurrenceDay,
+          status: updatedFullTask.status || 'PENDING',
+          completed_dates: updatedFullTask.completedDates || [],
+          calendar_id: updatedFullTask.calendarId || 'cal-shared-home',
+          assigned_to: updatedFullTask.assignedTo || '',
+          updated_by: activeUser?.name || activeUser?.email || 'Usuario'
+        })
+      });
+    } catch (e) {
+      console.error('Error in updateTask fetch:', e);
     }
   };
 
