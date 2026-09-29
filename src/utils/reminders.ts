@@ -24,24 +24,24 @@ export function filterTaskReminders(tasks: Task[], refDate: Date = new Date()): 
       continue;
     }
 
+    const taskDueDate = task.dueDate || (task as any).due_date || '';
     if (isTaskScheduledForDate(task, refDate)) {
       dueToday.push(task);
     } else if (!task.recurrence || task.recurrence === 'NONE') {
-      if (task.dueDate < todayStr) {
+      if (taskDueDate && taskDueDate < todayStr) {
         overdue.push(task);
       } else {
         upcoming.push(task);
       }
     } else {
-      // For recurring tasks, if due date was set in the past and today is after recurrence day
       upcoming.push(task);
     }
   }
 
   // Sort overdue (oldest first) and dueToday (by time if available)
-  overdue.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  dueToday.sort((a, b) => (a.dueTime || '23:59').localeCompare(b.dueTime || '23:59'));
-  upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  overdue.sort((a, b) => (a.dueDate || (a as any).due_date || '').localeCompare(b.dueDate || (b as any).due_date || ''));
+  dueToday.sort((a, b) => (a.dueTime || (a as any).due_time || '23:59').localeCompare(b.dueTime || (b as any).due_time || '23:59'));
+  upcoming.sort((a, b) => (a.dueDate || (a as any).due_date || '').localeCompare(b.dueDate || (b as any).due_date || ''));
 
   return {
     dueToday,

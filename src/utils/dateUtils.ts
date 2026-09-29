@@ -10,8 +10,13 @@ export function toISODateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function parseISODate(dateStr: string): Date {
-  const [year, month, day] = dateStr.split('-').map(Number);
+export function parseISODate(dateStr?: string): Date {
+  if (!dateStr || typeof dateStr !== 'string') {
+    return new Date();
+  }
+  const parts = dateStr.split('-');
+  if (parts.length < 3) return new Date();
+  const [year, month, day] = parts.map(Number);
   return new Date(year, month - 1, day, 12, 0, 0); // Noon to prevent timezone drift
 }
 
@@ -23,18 +28,23 @@ export function isSameDay(d1: Date, d2: Date): boolean {
   );
 }
 
-export function isDateToday(dateStr: string, refDate: Date = new Date()): boolean {
+export function isDateToday(dateStr?: string, refDate: Date = new Date()): boolean {
+  if (!dateStr) return false;
   const target = parseISODate(dateStr);
   return isSameDay(target, refDate);
 }
 
-export function isDateOverdue(dateStr: string, refDate: Date = new Date()): boolean {
+export function isDateOverdue(dateStr?: string, refDate: Date = new Date()): boolean {
+  if (!dateStr) return false;
   const todayStr = toISODateString(refDate);
   return dateStr < todayStr;
 }
 
-export function formatReadableDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-').map(Number);
+export function formatReadableDate(dateStr?: string): string {
+  if (!dateStr || typeof dateStr !== 'string') return '';
+  const parts = dateStr.split('-');
+  if (parts.length < 3) return dateStr;
+  const [year, month, day] = parts.map(Number);
   const date = new Date(year, month - 1, day);
   return date.toLocaleDateString('es-ES', {
     weekday: 'short',
@@ -116,31 +126,37 @@ export function formatCurrency(amount?: number, currency = 'USD'): string {
  * Checks if a task is scheduled to appear on a specific calendar date (handling one-time and recurring tasks)
  */
 export function isTaskScheduledForDate(task: Task, date: Date): boolean {
-  const dateStr = toISODateString(date);
-
-  // If task start date is after the given date, it does not apply yet
-  if (task.dueDate > dateStr) {
+  if (!task) return false;
+  const dueDate = task.dueDate || (task as any).due_date;
+  if (!dueDate || typeof dueDate !== 'string') {
     return false;
   }
 
-  const recurrence = task.recurrence || 'NONE';
+  const dateStr = toISODateString(date);
+
+  // If task start date is after the given date, it does not apply yet
+  if (dueDate > dateStr) {
+    return false;
+  }
+
+  const recurrence = task.recurrence || (task as any).recurrence || 'NONE';
 
   if (recurrence === 'NONE') {
-    return task.dueDate === dateStr;
+    return dueDate === dateStr;
   }
 
   if (recurrence === 'DAILY') {
     return true;
   }
 
-  const taskStart = parseISODate(task.dueDate);
+  const taskStart = parseISODate(dueDate);
 
   if (recurrence === 'WEEKLY') {
     return date.getDay() === taskStart.getDay();
   }
 
   if (recurrence === 'MONTHLY') {
-    const targetDay = task.recurrenceDay || taskStart.getDate();
+    const targetDay = task.recurrenceDay || (task as any).recurrence_day || taskStart.getDate();
     const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
     
     // If target day is 31 and month has 30 or 28 days, match the last day of the month
@@ -161,8 +177,10 @@ export function isTaskScheduledForDate(task: Task, date: Date): boolean {
  * Checks if a task is completed for a specific occurrence date
  */
 export function isTaskOccurrenceCompleted(task: Task, dateStr: string): boolean {
+  if (!task) return false;
+  const completedDates = task.completedDates || (task as any).completed_dates || [];
   if (task.recurrence && task.recurrence !== 'NONE') {
-    return Boolean(task.completedDates?.includes(dateStr));
+    return Boolean(Array.isArray(completedDates) && completedDates.includes(dateStr));
   }
   return task.status === 'DONE';
 }
