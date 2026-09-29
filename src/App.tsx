@@ -281,7 +281,12 @@ export const App: React.FC = () => {
         onClose={() => setIsJsonImportOpen(false)}
         calendars={calendars}
         selectedCalendarId={selectedCalendarId}
-        onImportSuccess={() => refreshTasks()}
+        onImportSuccess={(calId) => {
+          refreshTasks();
+          if (calId) {
+            setSelectedCalendarId(calId);
+          }
+        }}
         activeUserEmail={activeUser.email}
       />
 

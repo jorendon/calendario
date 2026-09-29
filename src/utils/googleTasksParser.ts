@@ -170,15 +170,16 @@ export function parseGoogleTasksJson(
         }
 
         // Determine dueDate for this recurring task
+        // We use first_instance_date so that the recurrence rule is active across current and past months
         let dueDate: string;
-        if (latestScheduledDate) {
-          dueDate = latestScheduledDate;
-        } else if (recurrenceDay) {
-          dueDate = computeNextOccurrenceDate(recurrenceDay, 2026, 10);
-        } else if (sched.first_instance_date) {
+        if (sched.first_instance_date) {
           dueDate = sched.first_instance_date.split('T')[0];
+        } else if (recurrenceDay) {
+          dueDate = computeNextOccurrenceDate(recurrenceDay, 2025, 1);
+        } else if (latestScheduledDate) {
+          dueDate = latestScheduledDate;
         } else {
-          dueDate = new Date().toISOString().split('T')[0];
+          dueDate = '2025-01-01';
         }
 
         results.push({

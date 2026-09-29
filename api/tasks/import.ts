@@ -99,6 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ${pgArrayLiteral}::text[], ${task.status}, ${task.created_by},
             ${task.assigned_to || null}, ${task.google_task_id || null}, ${task.created_at}
           ) ON CONFLICT (id) DO UPDATE SET
+            calendar_id = EXCLUDED.calendar_id,
             title = EXCLUDED.title,
             description = EXCLUDED.description,
             due_date = EXCLUDED.due_date,

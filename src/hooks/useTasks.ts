@@ -174,7 +174,7 @@ export function useTasks() {
       const res = await fetch('/api/tasks');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const mapped: Task[] = data.map(d => ({
             id: d.id,
             calendarId: d.calendar_id || d.calendarId || 'cal-shared-home',

@@ -20,7 +20,7 @@ interface JsonImportModalProps {
   onClose: () => void;
   calendars: CalendarType[];
   selectedCalendarId: string;
-  onImportSuccess: () => void;
+  onImportSuccess: (targetCalendarId?: string) => void;
   activeUserEmail: string;
 }
 
@@ -86,6 +86,16 @@ export const JsonImportModal: React.FC<JsonImportModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [successCount, setSuccessCount] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (selectedCalendarId && selectedCalendarId !== 'all') {
+        setTargetCalendar(selectedCalendarId);
+      } else if (calendars.length > 0) {
+        setTargetCalendar(prev => (prev && calendars.some(c => c.id === prev) ? prev : calendars[0].id));
+      }
+    }
+  }, [isOpen, selectedCalendarId, calendars]);
 
   if (!isOpen) return null;
 
@@ -195,7 +205,7 @@ export const JsonImportModal: React.FC<JsonImportModalProps> = ({
 
       setSuccessCount(data.count || parsedTasks.length);
       setTimeout(() => {
-        onImportSuccess();
+        onImportSuccess(targetCalendar);
         onClose();
       }, 1500);
     } catch (err: any) {
