@@ -137,10 +137,10 @@ export function useTasks() {
   const fetchTasks = useCallback(async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/tasks');
+      const res = await fetch(`/api/tasks?_t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const mapped: Task[] = data.map(d => ({
             id: d.id,
             calendarId: d.calendar_id || d.calendarId || 'cal-shared-home',
@@ -162,16 +162,12 @@ export function useTasks() {
             googleTaskId: d.google_task_id || d.googleTaskId,
             createdAt: d.created_at || d.createdAt
           }));
-          setTasks(prev => {
-            const map = new Map(mapped.map(t => [t.id, t]));
-            // Merge with local tasks so nothing created offline or before is lost
-            for (const localTask of prev) {
-              if (!map.has(localTask.id)) {
-                map.set(localTask.id, localTask);
-              }
-            }
-            return Array.from(map.values());
-          });
+          setTasks(mapped);
+          try {
+            localStorage.setItem(STORAGE_TASKS_KEY, JSON.stringify(mapped));
+          } catch (e) {
+            console.warn('LocalStorage error:', e);
+          }
         }
       }
 
