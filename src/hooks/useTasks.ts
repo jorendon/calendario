@@ -507,6 +507,39 @@ export function useTasks() {
     }
   };
 
+  // Delete Calendar
+  const deleteCalendar = async (calId: string) => {
+    if (calId === 'cal-shared-home' || calId === 'all') {
+      showToast('El calendario principal no puede ser eliminado.');
+      return;
+    }
+
+    const calToDelete = calendars.find(c => c.id === calId);
+    const calName = calToDelete ? calToDelete.name : 'Calendario';
+
+    // 1. Remove calendar and reassign its tasks to default calendar
+    setCalendars(prev => prev.filter(c => c.id !== calId));
+    setTasks(prev => prev.map(t => (t.calendarId === calId ? { ...t, calendarId: 'cal-shared-home' } : t)));
+
+    // 2. Reset selection if current calendar was deleted
+    if (selectedCalendarId === calId) {
+      setSelectedCalendarId('cal-shared-home');
+    }
+
+    showToast(`Calendario "${calName}" eliminado.`);
+
+    // 3. Persist in backend
+    try {
+      await fetch(`/api/calendars?id=${encodeURIComponent(calId)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: calId })
+      });
+    } catch {
+      // Offline fallback
+    }
+  };
+
   // Add new User
   const addUser = async (name: string, email: string, password = 'Calendario2006*') => {
     const newUser: User = {
@@ -621,6 +654,7 @@ export function useTasks() {
     deleteTask,
     createCategory,
     createCalendar,
+    deleteCalendar,
     addUser,
     importGoogleTasks,
     importTasksLocal,

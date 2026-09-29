@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar as CalendarType, CalendarSummary } from '../../types';
-import { Plus, Calendar, AlertCircle, Clock, CheckCircle, DollarSign, Layers } from 'lucide-react';
+import { Plus, Calendar, AlertCircle, Clock, CheckCircle, DollarSign, Layers, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/dateUtils';
 
 interface CalendarSidebarProps {
@@ -9,6 +9,7 @@ interface CalendarSidebarProps {
   onSelectCalendar: (id: string) => void;
   summary: CalendarSummary;
   onCreateCalendar: (name: string, color: string, description?: string) => void;
+  onDeleteCalendar?: (id: string) => void;
 }
 
 const PRESET_COLORS = [
@@ -26,7 +27,8 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
   selectedCalendarId,
   onSelectCalendar,
   summary,
-  onCreateCalendar
+  onCreateCalendar,
+  onDeleteCalendar
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newCalName, setNewCalName] = useState('');
@@ -127,28 +129,46 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
           </button>
 
           {calendars.map(cal => (
-            <button
+            <div
               key={cal.id}
               onClick={() => onSelectCalendar(cal.id)}
-              className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-all ${
+              className={`group/cal w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-all cursor-pointer ${
                 selectedCalendarId === cal.id
                   ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 font-semibold'
                   : 'text-slate-300 hover:bg-slate-800/60'
               }`}
             >
-              <div className="flex items-center space-x-2.5 truncate">
+              <div className="flex items-center space-x-2.5 truncate flex-1 min-w-0 pr-2">
                 <span
                   className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: cal.color }}
                 />
                 <span className="truncate">{cal.name}</span>
               </div>
-              {cal.isDefault && (
-                <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                  Principal
-                </span>
-              )}
-            </button>
+              <div className="flex items-center space-x-1.5 flex-shrink-0">
+                {cal.isDefault ? (
+                  <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                    Principal
+                  </span>
+                ) : (
+                  onDeleteCalendar && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`¿Deseas eliminar el calendario "${cal.name}"? Sus tareas pasarán al calendario principal.`)) {
+                          onDeleteCalendar(cal.id);
+                        }
+                      }}
+                      className="opacity-0 group-hover/cal:opacity-100 p-1 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded transition-all"
+                      title="Eliminar calendario"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
           ))}
         </div>
       </div>

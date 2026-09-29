@@ -40,6 +40,7 @@ export const App: React.FC = () => {
     deleteTask,
     createCategory,
     createCalendar,
+    deleteCalendar,
     addUser,
     importGoogleTasks,
     importTasksLocal,
@@ -170,6 +171,7 @@ export const App: React.FC = () => {
           onSelectCalendar={setSelectedCalendarId}
           summary={summary}
           onCreateCalendar={createCalendar}
+          onDeleteCalendar={deleteCalendar}
         />
 
         {/* Calendar View Area */}

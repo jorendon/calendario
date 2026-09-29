@@ -130,5 +130,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(201).json(newCalendar);
   }
 
+  if (req.method === 'DELETE') {
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    body = body || {};
+
+    const id = (req.query.id as string) || body.id;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Calendar ID is required' });
+    }
+
+    if (id === 'cal-shared-home') {
+      return res.status(400).json({ error: 'Cannot delete default calendar' });
+    }
+
+    if (hasPostgres) {
+      try {
+        // Move any tasks in this calendar to default calendar
+        await sql`
+          UPDATE app_tasks
+          SET calendar_id = 'cal-shared-home'
+          WHERE calendar_id = ${id};
+        `;
+        // Delete calendar
+        await sql`
+          DELETE FROM app_calendars
+          WHERE id = ${id} AND is_default = false;
+        `;
+      } catch (err) {
+        console.error('Postgres error in DELETE /api/calendars:', err);
+        return res.status(500).json({ error: 'Error deleting calendar from database' });
+      }
+    }
+
+    memoryStore.calendars = memoryStore.calendars.filter(c => c.id !== id);
+    for (const t of memoryStore.tasks) {
+      if (t.calendar_id === id) {
+        t.calendar_id = 'cal-shared-home';
+      }
+    }
+
+    return res.status(200).json({ success: true, message: 'Calendar deleted' });
+  }
+
   return res.status(405).json({ error: 'Method not allowed' });
 }
