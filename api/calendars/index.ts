@@ -42,12 +42,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const query = await sql`SELECT * FROM app_calendars ORDER BY created_at ASC;`;
-        return res.status(200).json(query.rows);
+        const unique = new Map<string, any>();
+        for (const row of query.rows) {
+          const key = (row.name || '').toLowerCase().trim();
+          if (!unique.has(key) || row.is_default) {
+            unique.set(key, row);
+          }
+        }
+        return res.status(200).json(Array.from(unique.values()));
       } catch (err) {
         console.error('Postgres error in GET /api/calendars:', err);
       }
     }
-    return res.status(200).json(memoryStore.calendars);
+    const memUnique = new Map<string, any>();
+    for (const c of memoryStore.calendars) {
+      const key = (c.name || '').toLowerCase().trim();
+      if (!memUnique.has(key) || c.is_default) {
+        memUnique.set(key, c);
+      }
+    }
+    return res.status(200).json(Array.from(memUnique.values()));
   }
 
   if (req.method === 'POST') {

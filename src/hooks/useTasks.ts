@@ -140,7 +140,7 @@ export function useTasks() {
       const res = await fetch('/api/tasks');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           const mapped: Task[] = data.map(d => ({
             id: d.id,
             calendarId: d.calendar_id || d.calendarId || 'cal-shared-home',
@@ -162,7 +162,16 @@ export function useTasks() {
             googleTaskId: d.google_task_id || d.googleTaskId,
             createdAt: d.created_at || d.createdAt
           }));
-          setTasks(mapped);
+          setTasks(prev => {
+            const map = new Map(mapped.map(t => [t.id, t]));
+            // Merge with local tasks so nothing created offline or before is lost
+            for (const localTask of prev) {
+              if (!map.has(localTask.id)) {
+                map.set(localTask.id, localTask);
+              }
+            }
+            return Array.from(map.values());
+          });
         }
       }
 
@@ -576,8 +585,15 @@ export function useTasks() {
       for (const t of mapped) {
         map.set(t.id, t);
       }
-      return Array.from(map.values());
+      const updated = Array.from(map.values());
+      try {
+        localStorage.setItem(STORAGE_TASKS_KEY, JSON.stringify(updated));
+      } catch (e) {
+        console.warn('LocalStorage error in importTasksLocal:', e);
+      }
+      return updated;
     });
+    showToast(`Se cargaron ${mapped.length} tareas en tu calendario.`);
   };
 
   // Filter tasks by active calendar

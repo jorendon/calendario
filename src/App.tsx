@@ -302,7 +302,6 @@ export const App: React.FC = () => {
           if (calId) {
             setSelectedCalendarId(calId);
           }
-          refreshTasks();
         }}
         activeUserEmail={activeUser.email}
       />

@@ -191,21 +191,26 @@ export async function initDatabase() {
     `;
 
     // Ensure alter table runs for any columns added across project iterations
-    try {
-      await sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS recurrence VARCHAR(20) DEFAULT 'NONE';`;
-      await sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS recurrence_day INTEGER;`;
-      await sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS completed_dates TEXT[];`;
-      await sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS google_task_id VARCHAR(255);`;
-      await sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255);`;
-      await sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD';`;
-      await sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE;`;
-      await sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS completed_by VARCHAR(255);`;
-      await sql`ALTER TABLE app_calendars ADD COLUMN IF NOT EXISTS member_emails TEXT[];`;
-      await sql`ALTER TABLE app_calendars ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE;`;
-      await sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;`;
-      await sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`;
-    } catch (alterErr) {
-      console.error('Error running ALTER TABLE migrations:', alterErr);
+    const alterStatements = [
+      sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS recurrence VARCHAR(20) DEFAULT 'NONE';`,
+      sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS recurrence_day INTEGER;`,
+      sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS completed_dates TEXT[];`,
+      sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS google_task_id VARCHAR(255);`,
+      sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255);`,
+      sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD';`,
+      sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE;`,
+      sql`ALTER TABLE app_tasks ADD COLUMN IF NOT EXISTS completed_by VARCHAR(255);`,
+      sql`ALTER TABLE app_calendars ADD COLUMN IF NOT EXISTS member_emails TEXT[];`,
+      sql`ALTER TABLE app_calendars ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE;`,
+      sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;`,
+      sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`
+    ];
+    for (const stmt of alterStatements) {
+      try {
+        await stmt;
+      } catch (alterErr) {
+        // Individual column migration errors won't block remaining columns
+      }
     }
 
     // Seed default users if not exists
