@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useTasks } from './hooks/useTasks';
 import { calculateSummary } from './utils/reminders';
 import { Task } from './types';
@@ -17,6 +17,7 @@ import { LoginGate } from './components/Auth/LoginGate';
 import { GoogleSyncModal } from './components/GoogleSync/GoogleSyncModal';
 import { JsonImportModal } from './components/Tasks/JsonImportModal';
 import { EmailDiagnosticsModal } from './components/Email/EmailDiagnosticsModal';
+import { InstallAppModal } from './components/Install/InstallAppModal';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
 import { Sparkles } from 'lucide-react';
 
@@ -64,6 +65,17 @@ export const App: React.FC = () => {
   const [isGoogleSyncOpen, setIsGoogleSyncOpen] = useState(false);
   const [isJsonImportOpen, setIsJsonImportOpen] = useState(false);
   const [isEmailDiagnosticsOpen, setIsEmailDiagnosticsOpen] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: any) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+  }, []);
 
   const summary = calculateSummary(tasks, currentDate);
 
@@ -143,6 +155,7 @@ export const App: React.FC = () => {
         onOpenGoogleSync={() => setIsGoogleSyncOpen(true)}
         onOpenJsonImport={() => setIsJsonImportOpen(true)}
         onOpenEmailDiagnostics={() => setIsEmailDiagnosticsOpen(true)}
+        onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onOpenLogin={() => setIsLoginOpen(true)}
         onLogout={logout}
       />
@@ -294,6 +307,15 @@ export const App: React.FC = () => {
         isOpen={isEmailDiagnosticsOpen}
         onClose={() => setIsEmailDiagnosticsOpen(false)}
         activeUserEmail={activeUser.email}
+      />
+
+      <InstallAppModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+        deferredPrompt={deferredInstallPrompt}
+        onInstalled={() => {
+          setDeferredInstallPrompt(null);
+        }}
       />
     </div>
   );

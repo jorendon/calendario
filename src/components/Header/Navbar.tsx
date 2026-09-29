@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   LogOut,
   Upload,
-  Mail
+  Mail,
+  Download
 } from 'lucide-react';
 import { User } from '../../types';
 
@@ -29,6 +30,7 @@ interface NavbarProps {
   onOpenGoogleSync: () => void;
   onOpenJsonImport: () => void;
   onOpenEmailDiagnostics: () => void;
+  onOpenInstallModal: () => void;
   onOpenLogin: () => void;
   onLogout: () => void;
 }
@@ -48,10 +50,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenGoogleSync,
   onOpenJsonImport,
   onOpenEmailDiagnostics,
+  onOpenInstallModal,
   onOpenLogin,
   onLogout
 }) => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  const isStandalone = typeof window !== 'undefined' && (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    Boolean((window.navigator as any).standalone)
+  );
 
   const monthName = currentDate.toLocaleDateString('es-ES', {
     month: 'long',
@@ -146,6 +154,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="hidden sm:inline">Importar JSON</span>
           </button>
 
+          {/* Install Desktop App Button */}
+          {!isStandalone && (
+            <button
+              onClick={onOpenInstallModal}
+              className="flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/40 rounded-lg transition-colors shadow-sm"
+              title="Instalar como aplicación nativa en Mac o Windows"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Instalar App</span>
+            </button>
+          )}
+
           {/* Email Diagnostics Button */}
           <button
             onClick={onOpenEmailDiagnostics}
@@ -227,6 +247,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <Mail className="w-3.5 h-3.5 text-blue-400" />
                       <span>Diagnóstico de Correos</span>
                     </button>
+                    {!isStandalone && (
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenInstallModal();
+                        }}
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-emerald-300 hover:bg-slate-700 flex items-center space-x-2 font-medium"
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Instalar aplicación (Mac / PC)</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setUserDropdownOpen(false);
