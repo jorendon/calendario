@@ -70,7 +70,7 @@ export function getEmailConfig() {
 }
 
 export interface SendTaskEmailOptions {
-  type: 'CREATED' | 'COMPLETED' | 'REOPENED' | 'EDITED' | 'DELETED' | 'REMINDER';
+  type: 'CREATED' | 'COMPLETED' | 'REOPENED' | 'EDITED' | 'DELETED' | 'REMINDER' | 'BULK_IMPORT';
   task?: DBTask;
   tasks?: DBTask[];
   calendarName?: string;
@@ -554,6 +554,75 @@ export async function notifyCalendarMembers(options: SendTaskEmailOptions) {
 
         <p style="color: #94a3b8; font-size: 13px; text-align: center;">
           Ingresa a la aplicación para marcarlas como realizadas cuando estén listas.
+        </p>
+      </div>
+    `;
+  } else if (type === 'BULK_IMPORT' && tasks && tasks.length > 0) {
+    subject = `📦 Carga masiva de tareas: ${tasks.length} tareas importadas`;
+
+    const previewList = tasks.slice(0, 30);
+    const hasMore = tasks.length > 30;
+
+    const rows = previewList.map(t => {
+      const isRec = t.recurrence && t.recurrence !== 'NONE';
+      const recLabel = isRec
+        ? `🔄 ${t.recurrence}${t.recurrence_day ? ` (${t.recurrence_day})` : ''}`
+        : '📌 Puntual';
+      const amountStr = t.amount
+        ? `$${Number(t.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${t.currency || 'USD'}`
+        : '-';
+
+      return `
+        <tr style="border-bottom: 1px solid #334155;">
+          <td style="padding: 8px 4px; color: #f8fafc; font-weight: 600;">${t.title}</td>
+          <td style="padding: 8px 4px; color: #c084fc; font-size: 12px;">${recLabel}</td>
+          <td style="padding: 8px 4px; color: #94a3b8; font-size: 12px;">${t.due_date}</td>
+          <td style="padding: 8px 4px; color: #34d399; font-weight: 700; font-size: 12px;">${amountStr}</td>
+        </tr>
+      `;
+    }).join('');
+
+    htmlContent = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 650px; margin: 0 auto; padding: 24px; background-color: #0f172a; color: #f8fafc; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="color: #6366f1; margin: 0; font-size: 24px;">📦 Carga Masiva de Tareas</h1>
+          <p style="color: #94a3b8; font-size: 14px; margin-top: 4px;">Calendario: <strong>${calendarName}</strong></p>
+        </div>
+
+        <div style="background-color: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #6366f1;">
+          <p style="color: #cbd5e1; font-size: 14px; margin-top: 0;">
+            Se importaron exitosamente <strong>${tasks.length}</strong> tareas al calendario compartido.
+          </p>
+          <p style="color: #94a3b8; font-size: 13px;">
+            👤 Importado por: <strong style="color: #f1f5f9;">${actionBy || 'Usuario'}</strong>
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 2px solid #475569; text-align: left; color: #94a3b8; font-size: 12px;">
+                <th style="padding: 6px 4px;">Tarea</th>
+                <th style="padding: 6px 4px;">Tipo</th>
+                <th style="padding: 6px 4px;">Vencimiento</th>
+                <th style="padding: 6px 4px;">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+
+          ${hasMore ? `
+            <p style="color: #94a3b8; font-size: 12px; margin-top: 12px; text-align: center;">
+              ... y ${tasks.length - 30} tarea(s) adicionales.
+            </p>
+          ` : ''}
+        </div>
+
+        <p style="color: #94a3b8; font-size: 12px; text-align: center; line-height: 1.5;">
+          ℹ️ <em>Se envió este único correo resumen para evitar saturar tu bandeja con notificaciones individuales por cada tarea.</em>
+        </p>
+        <p style="color: #64748b; font-size: 11px; text-align: center; margin-top: 16px;">
+          Notificación enviada a los miembros (${primaryRecipients.join(', ')}).
         </p>
       </div>
     `;

@@ -1,7 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '@vercel/postgres';
 import { memoryStore, hasPostgres, initDatabase } from '../_lib/db.js';
+import { notifyCalendarMembers } from '../_lib/email.js';
+import { parseGoogleTasksJson } from '../../src/utils/googleTasksParser.js';
 import type { DBTask } from '../_lib/types.js';
+
+function toPgTextArray(arr: any): string {
+  if (!arr || !Array.isArray(arr) || arr.length === 0) {
+    return '{}';
+  }
+  const clean = arr.map((x: any) => `"${String(x).replace(/"/g, '\\"')}"`);
+  return `{${clean.join(',')}}`;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -19,105 +29,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   await initDatabase();
 
+  let body = req.body;
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      body = {};
+    }
+  }
+  body = body || {};
+
   const {
     calendar_id = 'cal-shared-home',
     user_email = 'Jonathan.rendon@gmail.com',
+    user_name = '',
     tasks = []
-  } = req.body || {};
+  } = body;
 
-  if (!Array.isArray(tasks) || tasks.length === 0) {
-    return res.status(400).json({ error: 'Debes enviar un array de tareas válido.' });
+  // Accept tasks array or direct Google Tasks Takeout root object
+  let tasksToProcess: any = tasks;
+  if ((!Array.isArray(tasks) || tasks.length === 0) && (body.items || body.recurrences || body.kind)) {
+    tasksToProcess = body;
   }
 
-  const normalizedTasks: DBTask[] = [];
+  const parsed = parseGoogleTasksJson(tasksToProcess, {
+    calendarId: calendar_id,
+    defaultUser: user_email
+  });
 
-  for (const item of tasks) {
-    if (!item) continue;
-    
-    // Normalize title
-    const title = (item.title || item.titulo || item.name || item.nombre || item.task || '').trim();
-    if (!title) continue;
-
-    // Normalize date (format YYYY-MM-DD)
-    let rawDate = item.due_date || item.dueDate || item.due || item.fecha || item.date || item.fecha_vencimiento;
-    let dueDate = new Date().toISOString().split('T')[0];
-    if (rawDate) {
-      if (typeof rawDate === 'string') {
-        dueDate = rawDate.split('T')[0];
-      } else if (rawDate instanceof Date) {
-        dueDate = rawDate.toISOString().split('T')[0];
-      }
-    }
-
-    // Normalize time
-    const dueTime = item.due_time || item.dueTime || item.hora || '10:00';
-
-    // Normalize amount
-    let amount: number | undefined = undefined;
-    const rawAmount = item.amount ?? item.monto ?? item.valor ?? item.precio;
-    if (rawAmount !== undefined && rawAmount !== null && rawAmount !== '') {
-      const parsed = typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount).replace(/[^0-9.-]+/g, ''));
-      if (!isNaN(parsed)) {
-        amount = parsed;
-      }
-    }
-
-    // Normalize category
-    const category = (item.category || item.categoria || 'bills').toLowerCase();
-
-    // Normalize recurrence
-    const rawRecurrence = (item.recurrence || item.recurrencia || item.repeticion || 'NONE').toUpperCase();
-    let recurrence: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' = 'NONE';
-    if (['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(rawRecurrence)) {
-      recurrence = rawRecurrence as any;
-    } else if (rawRecurrence.includes('DIAR') || rawRecurrence === 'DAY') {
-      recurrence = 'DAILY';
-    } else if (rawRecurrence.includes('SEMAN') || rawRecurrence === 'WEEK') {
-      recurrence = 'WEEKLY';
-    } else if (rawRecurrence.includes('MENS') || rawRecurrence === 'MONTH') {
-      recurrence = 'MONTHLY';
-    } else if (rawRecurrence.includes('ANUAL') || rawRecurrence === 'YEAR') {
-      recurrence = 'YEARLY';
-    }
-
-    let recurrenceDay: number | undefined = undefined;
-    if (recurrence === 'MONTHLY') {
-      recurrenceDay = Number(item.recurrence_day || item.recurrenceDay || item.dia_repeticion) || (dueDate ? Number(dueDate.split('-')[2]) : 1);
-    }
-
-    // Normalize status
-    const rawStatus = String(item.status || item.estado || '').toLowerCase();
-    const isDone = rawStatus === 'completed' || rawStatus === 'done' || rawStatus === 'lista' || rawStatus === 'completada' || item.completed === true;
-    const status: 'PENDING' | 'DONE' = isDone ? 'DONE' : 'PENDING';
-
-    const newTask: DBTask = {
-      id: item.id || `json-task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      calendar_id: item.calendar_id || item.calendarId || calendar_id,
-      title,
-      description: item.description || item.descripcion || item.notes || item.notas || '',
-      due_date: dueDate,
-      due_time: dueTime,
-      amount,
-      currency: item.currency || 'USD',
-      category,
-      recurrence,
-      recurrence_day: recurrenceDay,
-      completed_dates: Array.isArray(item.completed_dates || item.completedDates) ? (item.completed_dates || item.completedDates) : [],
-      status,
-      created_by: item.created_by || item.createdBy || user_email,
-      assigned_to: item.assigned_to || item.assignedTo || undefined,
-      google_task_id: item.google_task_id || item.googleTaskId || (item.id && String(item.id).startsWith('google-') ? item.id : undefined),
-      created_at: new Date().toISOString()
-    };
-
-    normalizedTasks.push(newTask);
+  if (!parsed || parsed.length === 0) {
+    return res.status(400).json({ error: 'Debes enviar un JSON o array con tareas válidas.' });
   }
+
+  const normalizedTasks: DBTask[] = parsed.map(item => ({
+    id: item.id || `json-task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    calendar_id,
+    title: item.title,
+    description: item.description || '',
+    due_date: item.due_date,
+    due_time: item.due_time || '10:00',
+    amount: item.amount,
+    currency: item.currency || 'USD',
+    category: item.category,
+    recurrence: item.recurrence || 'NONE',
+    recurrence_day: item.recurrence_day,
+    completed_dates: Array.isArray(item.completed_dates) ? item.completed_dates : [],
+    status: item.status || 'PENDING',
+    created_by: item.created_by || user_email,
+    assigned_to: undefined,
+    google_task_id: item.google_task_id,
+    created_at: new Date().toISOString()
+  }));
 
   // Insert into Postgres / memory
   let insertedCount = 0;
   for (const task of normalizedTasks) {
     if (hasPostgres) {
       try {
+        const pgArrayLiteral = toPgTextArray(task.completed_dates);
         await sql`
           INSERT INTO app_tasks (
             id, calendar_id, title, description, due_date, due_time, amount, currency,
@@ -125,14 +94,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             assigned_to, google_task_id, created_at
           ) VALUES (
             ${task.id}, ${task.calendar_id}, ${task.title}, ${task.description || ''},
-            ${task.due_date}, ${task.due_time || ''}, ${task.amount || null}, ${task.currency || 'USD'},
+            ${task.due_date}, ${task.due_time || '10:00'}, ${task.amount !== undefined && task.amount !== null ? task.amount : null}, ${task.currency || 'USD'},
             ${task.category}, ${task.recurrence || 'NONE'}, ${task.recurrence_day || null},
-            ${task.completed_dates as any}, ${task.status}, ${task.created_by},
+            ${pgArrayLiteral}::text[], ${task.status}, ${task.created_by},
             ${task.assigned_to || null}, ${task.google_task_id || null}, ${task.created_at}
           ) ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
+            description = EXCLUDED.description,
             due_date = EXCLUDED.due_date,
+            due_time = EXCLUDED.due_time,
             amount = EXCLUDED.amount,
+            currency = EXCLUDED.currency,
+            category = EXCLUDED.category,
+            recurrence = EXCLUDED.recurrence,
+            recurrence_day = EXCLUDED.recurrence_day,
+            completed_dates = EXCLUDED.completed_dates,
             status = EXCLUDED.status;
         `;
         insertedCount++;
@@ -151,10 +127,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // Find calendar details and recipients
+  let calendarName = 'Hogar & Finanzas Compartidas';
+  let memberEmails: string[] = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
+
+  if (hasPostgres && calendar_id) {
+    try {
+      const calResult = await sql`
+        SELECT name, member_emails FROM app_calendars WHERE id = ${calendar_id} LIMIT 1;
+      `;
+      if (calResult.rows.length > 0) {
+        if (calResult.rows[0].name) {
+          calendarName = calResult.rows[0].name;
+        }
+        const dbEmails = calResult.rows[0].member_emails;
+        if (Array.isArray(dbEmails) && dbEmails.length > 0) {
+          memberEmails = dbEmails;
+        } else if (typeof dbEmails === 'string' && dbEmails.length > 0) {
+          memberEmails = dbEmails.replace(/[{}]/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching calendar in /api/tasks/import:', err);
+    }
+  }
+
+  if (!memberEmails || memberEmails.length === 0) {
+    memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
+  }
+
+  // Send ONE single bulk import summary email (no individual emails per task)
+  let emailSent = false;
+  try {
+    const emailRes = await notifyCalendarMembers({
+      type: 'BULK_IMPORT',
+      tasks: normalizedTasks,
+      calendarName,
+      recipients: memberEmails,
+      actionBy: user_name || user_email || 'Jonathan'
+    });
+    console.log('Bulk import summary email result:', emailRes);
+    emailSent = Boolean(emailRes?.sent);
+  } catch (e) {
+    console.error('Error sending bulk import email:', e);
+  }
+
   return res.status(200).json({
     success: true,
     count: normalizedTasks.length,
     inserted: insertedCount || normalizedTasks.length,
+    emailSent,
     tasks: normalizedTasks
   });
 }

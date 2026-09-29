@@ -9,9 +9,11 @@ import {
   Check,
   Calendar,
   Layers,
-  Repeat
+  Repeat,
+  Mail
 } from 'lucide-react';
 import { Calendar as CalendarType } from '../../types';
+import { parseGoogleTasksJson } from '../../utils/googleTasksParser';
 
 interface JsonImportModalProps {
   isOpen: boolean;
@@ -96,67 +98,26 @@ export const JsonImportModal: React.FC<JsonImportModalProps> = ({
     }
 
     try {
-      const parsed = JSON.parse(rawText);
-      let items: any[] = [];
+      const normalized = parseGoogleTasksJson(rawText, {
+        calendarId: targetCalendar,
+        defaultUser: activeUserEmail
+      });
 
-      if (Array.isArray(parsed)) {
-        items = parsed;
-      } else if (parsed && typeof parsed === 'object') {
-        if (Array.isArray(parsed.items)) {
-          // Google Takeout / Tasks format
-          items = parsed.items;
-        } else if (Array.isArray(parsed.tasks)) {
-          items = parsed.tasks;
-        } else if (Array.isArray(parsed.data)) {
-          items = parsed.data;
-        } else {
-          // Single task object
-          items = [parsed];
-        }
-      }
-
-      if (items.length === 0) {
-        setErrorMsg('El JSON no contiene una lista de tareas.');
+      if (!normalized || normalized.length === 0) {
+        setErrorMsg('El JSON no contiene tareas reconocibles. Asegúrate de subir el export de Google Tasks o una lista de tareas.');
         return;
       }
 
-      const previews: ParsedTaskPreview[] = items
-        .filter(it => it && typeof it === 'object')
-        .map(it => {
-          const title = String(it.title || it.titulo || it.name || it.nombre || it.task || 'Sin título').trim();
-          let rawDate = it.due_date || it.dueDate || it.due || it.fecha || it.date || it.fecha_vencimiento;
-          let dueDate = new Date().toISOString().split('T')[0];
-          if (rawDate) {
-            dueDate = String(rawDate).split('T')[0];
-          }
-
-          let amount: number | undefined = undefined;
-          const rawAmount = it.amount ?? it.monto ?? it.valor;
-          if (rawAmount !== undefined && rawAmount !== null && rawAmount !== '') {
-            const parsedAmt = typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount).replace(/[^0-9.-]+/g, ''));
-            if (!isNaN(parsedAmt)) amount = parsedAmt;
-          }
-
-          const category = String(it.category || it.categoria || 'other');
-          const recurrence = String(it.recurrence || it.recurrencia || it.repeticion || 'NONE').toUpperCase();
-
-          return {
-            title,
-            due_date: dueDate,
-            amount,
-            category,
-            recurrence: recurrence !== 'NONE' ? recurrence : undefined,
-            description: it.description || it.descripcion || it.notes || it.notas || undefined
-          };
-        })
-        .filter(t => t.title && t.title !== 'Sin título');
-
-      if (previews.length === 0) {
-        setErrorMsg('No se encontraron tareas con título válido en el JSON.');
-        return;
-      }
-
-      setParsedTasks(previews);
+      setParsedTasks(
+        normalized.map(t => ({
+          title: t.title,
+          due_date: t.due_date,
+          amount: t.amount,
+          category: t.category,
+          recurrence: t.recurrence !== 'NONE' ? t.recurrence : undefined,
+          description: t.description
+        }))
+      );
     } catch (err: any) {
       setErrorMsg(`Error de sintaxis JSON: ${err.message}`);
     }
@@ -204,13 +165,10 @@ export const JsonImportModal: React.FC<JsonImportModalProps> = ({
     setErrorMsg(null);
 
     try {
-      // Re-parse the text to pass all original or normalized task fields
-      const parsed = JSON.parse(jsonText);
-      let items: any[] = [];
-      if (Array.isArray(parsed)) items = parsed;
-      else if (parsed.items) items = parsed.items;
-      else if (parsed.tasks) items = parsed.tasks;
-      else items = [parsed];
+      const normalized = parseGoogleTasksJson(jsonText, {
+        calendarId: targetCalendar,
+        defaultUser: activeUserEmail
+      });
 
       const res = await fetch('/api/tasks/import', {
         method: 'POST',
@@ -218,7 +176,8 @@ export const JsonImportModal: React.FC<JsonImportModalProps> = ({
         body: JSON.stringify({
           calendar_id: targetCalendar,
           user_email: activeUserEmail,
-          tasks: items
+          user_name: activeUserEmail.includes('@') ? activeUserEmail.split('@')[0] : activeUserEmail,
+          tasks: normalized
         })
       });
 
@@ -418,13 +377,24 @@ export const JsonImportModal: React.FC<JsonImportModalProps> = ({
 
           {/* Tasks Preview */}
           {parsedTasks.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-emerald-400 flex items-center space-x-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{parsedTasks.length} tareas detectadas listas para importar:</span>
+                  <span>
+                    {parsedTasks.length} tareas detectadas ({parsedTasks.filter(t => t.recurrence).length} recurrentes, {parsedTasks.filter(t => !t.recurrence).length} puntuales)
+                  </span>
                 </span>
               </div>
+
+              {/* Informational banner about single email notification */}
+              <div className="p-2.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl text-indigo-300 text-xs flex items-center space-x-2">
+                <Mail className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                <span>
+                  Se enviará un <strong>único correo de resumen</strong> a los miembros con todas las tareas importadas.
+                </span>
+              </div>
+
               <div className="border border-slate-700/80 rounded-xl overflow-hidden max-h-48 overflow-y-auto bg-slate-950">
                 <table className="w-full text-[11px] text-left">
                   <thead className="bg-slate-800/80 text-slate-400 sticky top-0">
