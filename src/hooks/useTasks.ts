@@ -53,41 +53,7 @@ export function useTasks() {
     } catch {
       // ignore
     }
-    const today = new Date().toISOString().split('T')[0];
-    return [
-      {
-        id: 'task-rent-default',
-        calendarId: 'cal-shared-home',
-        title: 'Pagar la renta del mes',
-        description: 'Transferencia bancaria de alquiler del hogar',
-        dueDate: today,
-        dueTime: '09:00',
-        amount: 1800,
-        currency: 'USD',
-        category: 'rent',
-        recurrence: 'MONTHLY',
-        recurrenceDay: 1,
-        status: 'PENDING',
-        createdBy: 'Jonathan.rendon@gmail.com',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'task-power-default',
-        calendarId: 'cal-shared-home',
-        title: 'Pagar la luz',
-        description: 'Factura mensual de electricidad repetitiva todos los 25',
-        dueDate: '2026-09-25',
-        dueTime: '10:00',
-        amount: 110,
-        currency: 'USD',
-        category: 'bills',
-        recurrence: 'MONTHLY',
-        recurrenceDay: 25, // Repetitiva los 25 de cada mes
-        status: 'PENDING',
-        createdBy: 'michrotel@gmail.com',
-        createdAt: new Date().toISOString()
-      }
-    ];
+    return [];
   });
 
   const [calendars, setCalendars] = useState<Calendar[]>(() => {
