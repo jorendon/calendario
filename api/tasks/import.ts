@@ -81,44 +81,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     created_at: new Date().toISOString()
   }));
 
-  // Insert into Postgres / memory
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+  // Insert into Postgres (in parallel) and update in-memory store
   let insertedCount = 0;
-  for (const task of normalizedTasks) {
-    if (hasPostgres) {
-      try {
-        const pgArrayLiteral = toPgTextArray(task.completed_dates);
-        await sql`
-          INSERT INTO app_tasks (
-            id, calendar_id, title, description, due_date, due_time, amount, currency,
-            category, recurrence, recurrence_day, completed_dates, status, created_by,
-            assigned_to, google_task_id, created_at
-          ) VALUES (
-            ${task.id}, ${task.calendar_id}, ${task.title}, ${task.description || ''},
-            ${task.due_date}, ${task.due_time || '10:00'}, ${task.amount !== undefined && task.amount !== null ? task.amount : null}, ${task.currency || 'USD'},
-            ${task.category}, ${task.recurrence || 'NONE'}, ${task.recurrence_day || null},
-            ${pgArrayLiteral}::text[], ${task.status}, ${task.created_by},
-            ${task.assigned_to || null}, ${task.google_task_id || null}, ${task.created_at}
-          ) ON CONFLICT (id) DO UPDATE SET
-            calendar_id = EXCLUDED.calendar_id,
-            title = EXCLUDED.title,
-            description = EXCLUDED.description,
-            due_date = EXCLUDED.due_date,
-            due_time = EXCLUDED.due_time,
-            amount = EXCLUDED.amount,
-            currency = EXCLUDED.currency,
-            category = EXCLUDED.category,
-            recurrence = EXCLUDED.recurrence,
-            recurrence_day = EXCLUDED.recurrence_day,
-            completed_dates = EXCLUDED.completed_dates,
-            status = EXCLUDED.status;
-        `;
+  let postgresErrors: string[] = [];
+
+  if (hasPostgres) {
+    const insertPromises = normalizedTasks.map(async (task) => {
+      const pgArrayLiteral = toPgTextArray(task.completed_dates);
+      return sql`
+        INSERT INTO app_tasks (
+          id, calendar_id, title, description, due_date, due_time, amount, currency,
+          category, recurrence, recurrence_day, completed_dates, status, created_by,
+          assigned_to, google_task_id, created_at
+        ) VALUES (
+          ${task.id}, ${task.calendar_id}, ${task.title}, ${task.description || ''},
+          ${task.due_date}, ${task.due_time || '10:00'}, ${task.amount !== undefined && task.amount !== null ? task.amount : null}, ${task.currency || 'USD'},
+          ${task.category}, ${task.recurrence || 'NONE'}, ${task.recurrence_day || null},
+          ${pgArrayLiteral}::text[], ${task.status}, ${task.created_by},
+          ${task.assigned_to || null}, ${task.google_task_id || null}, ${task.created_at}
+        ) ON CONFLICT (id) DO UPDATE SET
+          calendar_id = EXCLUDED.calendar_id,
+          title = EXCLUDED.title,
+          description = EXCLUDED.description,
+          due_date = EXCLUDED.due_date,
+          due_time = EXCLUDED.due_time,
+          amount = EXCLUDED.amount,
+          currency = EXCLUDED.currency,
+          category = EXCLUDED.category,
+          recurrence = EXCLUDED.recurrence,
+          recurrence_day = EXCLUDED.recurrence_day,
+          completed_dates = EXCLUDED.completed_dates,
+          status = EXCLUDED.status;
+      `;
+    });
+
+    const results = await Promise.allSettled(insertPromises);
+    for (const res of results) {
+      if (res.status === 'fulfilled') {
         insertedCount++;
-      } catch (err) {
-        console.error('Error inserting task into Postgres:', err);
+      } else {
+        postgresErrors.push(res.reason?.message || String(res.reason));
       }
     }
 
-    // In-memory update
+    if (postgresErrors.length > 0) {
+      console.error(`Postgres insert had ${postgresErrors.length} errors. Sample:`, postgresErrors[0]);
+    }
+
+    if (insertedCount === 0 && normalizedTasks.length > 0) {
+      return res.status(500).json({
+        success: false,
+        error: `Fallo al guardar en la base de datos: ${postgresErrors[0] || 'Error desconocido'}`
+      });
+    }
+  }
+
+  // Update in-memory store
+  for (const task of normalizedTasks) {
     const existingIndex = memoryStore.tasks.findIndex(t => t.id === task.id);
     if (existingIndex >= 0) {
       memoryStore.tasks[existingIndex] = task;
@@ -157,17 +178,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     memberEmails = ['Jonathan.rendon@gmail.com', 'michrotel@gmail.com'];
   }
 
-  // Send ONE single bulk import summary email (no individual emails per task)
+  // Send ONE single bulk import summary email with timeout safeguard (never blocks the API)
   let emailSent = false;
   try {
-    const emailRes = await notifyCalendarMembers({
+    const emailPromise = notifyCalendarMembers({
       type: 'BULK_IMPORT',
       tasks: normalizedTasks,
       calendarName,
       recipients: memberEmails,
       actionBy: user_name || user_email || 'Jonathan'
     });
-    console.log('Bulk import summary email result:', emailRes);
+
+    const emailRes: any = await Promise.race([
+      emailPromise,
+      new Promise(resolve => setTimeout(() => resolve({ sent: false, note: 'timeout' }), 4000))
+    ]);
+
     emailSent = Boolean(emailRes?.sent);
   } catch (e) {
     console.error('Error sending bulk import email:', e);
@@ -176,7 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({
     success: true,
     count: normalizedTasks.length,
-    inserted: insertedCount || normalizedTasks.length,
+    inserted: insertedCount,
     emailSent,
     tasks: normalizedTasks
   });

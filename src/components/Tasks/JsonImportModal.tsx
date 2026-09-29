@@ -20,7 +20,7 @@ interface JsonImportModalProps {
   onClose: () => void;
   calendars: CalendarType[];
   selectedCalendarId: string;
-  onImportSuccess: (targetCalendarId?: string) => void;
+  onImportSuccess: (targetCalendarId?: string, importedTasks?: any[]) => void;
   activeUserEmail: string;
 }
 
@@ -205,7 +205,7 @@ export const JsonImportModal: React.FC<JsonImportModalProps> = ({
 
       setSuccessCount(data.count || parsedTasks.length);
       setTimeout(() => {
-        onImportSuccess(targetCalendar);
+        onImportSuccess(targetCalendar, data.tasks || normalized);
         onClose();
       }, 1500);
     } catch (err: any) {

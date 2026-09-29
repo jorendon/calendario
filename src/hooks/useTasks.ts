@@ -525,6 +525,37 @@ export function useTasks() {
     }
   };
 
+  const importTasksLocal = (importedList: any[], calendarId: string) => {
+    if (!Array.isArray(importedList) || importedList.length === 0) return;
+    const mapped: Task[] = importedList.map(d => ({
+      id: d.id,
+      calendarId: calendarId,
+      title: d.title,
+      description: d.description,
+      dueDate: d.due_date || d.dueDate,
+      dueTime: d.due_time || d.dueTime || '10:00',
+      amount: d.amount ? Number(d.amount) : undefined,
+      currency: d.currency || 'USD',
+      category: d.category || 'other',
+      recurrence: d.recurrence || 'NONE',
+      recurrenceDay: d.recurrence_day ? Number(d.recurrence_day) : (d.recurrenceDay ? Number(d.recurrenceDay) : undefined),
+      completedDates: Array.isArray(d.completed_dates) ? d.completed_dates : (Array.isArray(d.completedDates) ? d.completedDates : []),
+      status: d.status || 'PENDING',
+      createdBy: d.created_by || d.createdBy,
+      assignedTo: d.assigned_to || d.assignedTo,
+      googleTaskId: d.google_task_id || d.googleTaskId,
+      createdAt: d.created_at || d.createdAt || new Date().toISOString()
+    }));
+
+    setTasks(prev => {
+      const map = new Map(prev.map(t => [t.id, t]));
+      for (const t of mapped) {
+        map.set(t.id, t);
+      }
+      return Array.from(map.values());
+    });
+  };
+
   // Filter tasks by active calendar
   const filteredTasks = tasks.filter(task => {
     if (selectedCalendarId === 'all') return true;
@@ -552,6 +583,7 @@ export function useTasks() {
     createCalendar,
     addUser,
     importGoogleTasks,
+    importTasksLocal,
     refreshTasks: fetchTasks
   };
 }

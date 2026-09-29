@@ -42,6 +42,7 @@ export const App: React.FC = () => {
     createCalendar,
     addUser,
     importGoogleTasks,
+    importTasksLocal,
     refreshTasks
   } = useTasks();
 
@@ -294,11 +295,14 @@ export const App: React.FC = () => {
         onClose={() => setIsJsonImportOpen(false)}
         calendars={calendars}
         selectedCalendarId={selectedCalendarId}
-        onImportSuccess={(calId) => {
-          refreshTasks();
+        onImportSuccess={(calId, importedTasks) => {
+          if (importedTasks && calId) {
+            importTasksLocal(importedTasks, calId);
+          }
           if (calId) {
             setSelectedCalendarId(calId);
           }
+          refreshTasks();
         }}
         activeUserEmail={activeUser.email}
       />
