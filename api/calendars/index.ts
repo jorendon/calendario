@@ -1,13 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '@vercel/postgres';
-import { memoryStore, hasPostgres, initDatabase } from '../_lib/db.js';
+import { memoryStore, hasPostgres, initDatabase, toPgTextArray } from '../_lib/db.js';
 import type { DBCalendar } from '../_lib/types.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST,DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -18,6 +19,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     if (hasPostgres) {
       try {
+        // Auto-recover any calendars that have tasks associated but were missing from app_calendars table
+        try {
+          const orphanCals = await sql`
+            SELECT DISTINCT calendar_id
+            FROM app_tasks
+            WHERE calendar_id IS NOT NULL AND calendar_id != 'all' AND calendar_id NOT IN (SELECT id FROM app_calendars);
+          `;
+          for (const row of orphanCals.rows) {
+            if (row.calendar_id) {
+              const defaultName = 'Calendario de Tareas';
+              const members = toPgTextArray(['Jonathan.rendon@gmail.com', 'michrotel@gmail.com']);
+              await sql`
+                INSERT INTO app_calendars (id, name, color, description, created_by, is_default, member_emails, created_at)
+                VALUES (${row.calendar_id}, ${defaultName}, '#4f46e5', 'Calendario auto-recuperado', 'Jonathan.rendon@gmail.com', false, ${members}::text[], NOW())
+                ON CONFLICT (id) DO NOTHING;
+              `;
+            }
+          }
+        } catch (recoverErr) {
+          console.error('Error recovering orphan calendar IDs:', recoverErr);
+        }
+
         const query = await sql`SELECT * FROM app_calendars ORDER BY created_at ASC;`;
         return res.status(200).json(query.rows);
       } catch (err) {
@@ -28,7 +51,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const { name, color = '#4f46e5', description = '', created_by = 'Jonathan.rendon@gmail.com', member_emails = [] } = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    body = body || {};
+
+    const { id, name, color = '#4f46e5', description = '', created_by = 'Jonathan.rendon@gmail.com', member_emails = [] } = body;
 
     if (!name) {
       return res.status(400).json({ error: 'Calendar name is required' });
@@ -39,11 +72,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'Jonathan.rendon@gmail.com',
       'michrotel@gmail.com',
       created_by,
-      ...member_emails
+      ...(Array.isArray(member_emails) ? member_emails : [])
     ].filter(Boolean)));
 
     const newCalendar: DBCalendar = {
-      id: `cal-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: id || `cal-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name,
       color,
       description,
@@ -55,16 +88,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (hasPostgres) {
       try {
+        const pgEmails = toPgTextArray(newCalendar.member_emails);
         await sql`
           INSERT INTO app_calendars (id, name, color, description, created_by, is_default, member_emails, created_at)
-          VALUES (${newCalendar.id}, ${newCalendar.name}, ${newCalendar.color}, ${newCalendar.description || ''}, ${newCalendar.created_by}, false, ${newCalendar.member_emails as any}, ${newCalendar.created_at});
+          VALUES (${newCalendar.id}, ${newCalendar.name}, ${newCalendar.color}, ${newCalendar.description || ''}, ${newCalendar.created_by}, false, ${pgEmails}::text[], ${newCalendar.created_at})
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            color = EXCLUDED.color,
+            description = EXCLUDED.description,
+            member_emails = EXCLUDED.member_emails;
         `;
       } catch (err) {
         console.error('Postgres error in POST /api/calendars:', err);
+        return res.status(500).json({
+          error: 'Error al persistir el calendario en Postgres: ' + ((err as any)?.message || String(err))
+        });
       }
     }
 
-    memoryStore.calendars.push(newCalendar);
+    const existingIdx = memoryStore.calendars.findIndex(c => c.id === newCalendar.id);
+    if (existingIdx >= 0) {
+      memoryStore.calendars[existingIdx] = newCalendar;
+    } else {
+      memoryStore.calendars.push(newCalendar);
+    }
+
     return res.status(201).json(newCalendar);
   }
 

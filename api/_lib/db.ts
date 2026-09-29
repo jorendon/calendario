@@ -112,6 +112,14 @@ export const memoryStore = global.__calendarioInMemory;
 
 export const hasPostgres = Boolean(process.env.POSTGRES_URL || process.env.DATABASE_URL);
 
+export function toPgTextArray(arr: any): string {
+  if (!arr || !Array.isArray(arr) || arr.length === 0) {
+    return '{}';
+  }
+  const clean = arr.map((x: any) => `"${String(x).replace(/"/g, '\\"')}"`);
+  return `{${clean.join(',')}}`;
+}
+
 /**
  * Ensures tables exist in Vercel Postgres if connected
  */
@@ -211,9 +219,10 @@ export async function initDatabase() {
 
     // Seed default calendar if not exists
     for (const c of DEFAULT_CALENDARS) {
+      const pgEmails = toPgTextArray(c.member_emails);
       await sql`
         INSERT INTO app_calendars (id, name, color, description, created_by, is_default, member_emails)
-        VALUES (${c.id}, ${c.name}, ${c.color}, ${c.description}, ${c.created_by}, ${c.is_default}, ${c.member_emails as any})
+        VALUES (${c.id}, ${c.name}, ${c.color}, ${c.description}, ${c.created_by}, ${c.is_default}, ${pgEmails}::text[])
         ON CONFLICT (id) DO NOTHING;
       `;
     }

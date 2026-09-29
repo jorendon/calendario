@@ -188,7 +188,29 @@ export function useTasks() {
             memberEmails: c.member_emails || c.memberEmails || [],
             createdAt: c.created_at || c.createdAt
           }));
-          setCalendars(mappedCals);
+          setCalendars(prev => {
+            const map = new Map(mappedCals.map(c => [c.id, c]));
+            // Preserve user-created calendars from local state if not yet in backend
+            for (const localCal of prev) {
+              if (!map.has(localCal.id)) {
+                map.set(localCal.id, localCal);
+                // Background sync to backend to ensure it is saved
+                fetch('/api/calendars', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    id: localCal.id,
+                    name: localCal.name,
+                    color: localCal.color,
+                    description: localCal.description,
+                    created_by: localCal.createdBy,
+                    member_emails: localCal.memberEmails
+                  })
+                }).catch(() => {});
+              }
+            }
+            return Array.from(map.values());
+          });
         }
       }
 
@@ -455,6 +477,7 @@ export function useTasks() {
     };
 
     setCalendars(prev => [...prev, newCal]);
+    setSelectedCalendarId(newCal.id);
     showToast(`Calendario "${name}" creado exitosamente.`);
 
     try {
@@ -462,6 +485,7 @@ export function useTasks() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: newCal.id,
           name,
           color,
           description,
