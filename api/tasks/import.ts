@@ -43,6 +43,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     calendar_id = 'cal-shared-home',
     user_email = 'Jonathan.rendon@gmail.com',
     user_name = '',
+    completion_strategy = 'all_up_to_current_month_done',
+    clear_existing = false,
     tasks = []
   } = body;
 
@@ -54,11 +56,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const parsed = parseGoogleTasksJson(tasksToProcess, {
     calendarId: calendar_id,
-    defaultUser: user_email
+    defaultUser: user_email,
+    completionStrategy: completion_strategy
   });
 
   if (!parsed || parsed.length === 0) {
     return res.status(400).json({ error: 'Debes enviar un JSON o array con tareas válidas.' });
+  }
+
+  // If clear_existing is requested, wipe previous tasks of this calendar first
+  if (clear_existing && calendar_id) {
+    if (hasPostgres) {
+      try {
+        await sql`DELETE FROM app_tasks WHERE calendar_id = ${calendar_id};`;
+      } catch (err) {
+        console.error('Postgres error clearing calendar tasks before import:', err);
+      }
+    }
+    memoryStore.tasks = memoryStore.tasks.filter(t => t.calendar_id !== calendar_id);
   }
 
   const normalizedTasks: DBTask[] = parsed.map(item => ({

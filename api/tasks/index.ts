@@ -394,7 +394,22 @@ function toPgTextArray(arr: any): string {
     }
     body = body || {};
 
+    const calendarId = (req.query.calendarId as string) || (req.query.calendar_id as string) || body.calendarId || body.calendar_id;
     const id = (req.query.id as string) || body.id || (req.query.taskId as string);
+
+    // Support bulk deletion of all tasks for a specific calendar
+    if (calendarId && (id === 'all' || !id)) {
+      if (hasPostgres) {
+        try {
+          await sql`DELETE FROM app_tasks WHERE calendar_id = ${calendarId};`;
+        } catch (err) {
+          console.error('Postgres error in bulk DELETE /api/tasks:', err);
+        }
+      }
+      memoryStore.tasks = memoryStore.tasks.filter(t => t.calendar_id !== calendarId);
+      return res.status(200).json({ success: true, message: `All tasks deleted for calendar ${calendarId}` });
+    }
+
     if (!id || typeof id !== 'string') {
       return res.status(400).json({ error: 'Valid task ID is required' });
     }

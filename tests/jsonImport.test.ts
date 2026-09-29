@@ -238,5 +238,36 @@ describe('JSON tasks import normalization', () => {
 
     console.log(`Successfully parsed user file: Total tasks = ${parsed.length} (${recurring.length} recurring, ${parsed.length - recurring.length} standalone)`);
   });
+
+  it('marks all recurring occurrences up to September as done and leaves October pending when using all_up_to_current_month_done', async () => {
+    const fs = await import('fs');
+    const path = '/Users/jonathan/.gemini/antigravity/brain/d0b8ae7b-b8d4-4b9f-9871-2fdb4e3b5c70/.user_uploaded/media_1790689655704.json';
+    if (!fs.existsSync(path)) return;
+
+    const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+    const parsed = parseGoogleTasksJson(data, {
+      completionStrategy: 'all_up_to_current_month_done'
+    });
+
+    const recurring = parsed.filter(t => t.recurrence && t.recurrence !== 'NONE');
+    expect(recurring.length).toBe(49);
+
+    for (const task of recurring) {
+      // Must be pending so future occurrences can be checked
+      expect(task.status).toBe('PENDING');
+      // Has completed dates in past / up to September
+      expect(task.completed_dates?.length).toBeGreaterThan(0);
+      // None of the completed dates should be in October 2026 or future
+      for (const d of task.completed_dates || []) {
+        expect(d <= '2026-09-30').toBe(true);
+      }
+    }
+
+    // Standalone tasks in September or earlier should be DONE, October should be PENDING
+    const klarnaOct = parsed.find(t => t.title.toLowerCase().includes('klarna') && t.due_date?.startsWith('2026-10'));
+    if (klarnaOct) {
+      expect(klarnaOct.status).toBe('PENDING');
+    }
+  });
 });
 

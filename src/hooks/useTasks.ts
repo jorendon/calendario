@@ -591,7 +591,30 @@ export function useTasks() {
     }
   };
 
-  const importTasksLocal = (importedList: any[], calendarId: string) => {
+  const clearCalendarTasks = async (calendarId: string) => {
+    setTasks(prev => {
+      const updated = prev.filter(t => t.calendarId !== calendarId);
+      try {
+        localStorage.setItem(STORAGE_TASKS_KEY, JSON.stringify(updated));
+      } catch (e) {
+        console.warn('LocalStorage error in clearCalendarTasks:', e);
+      }
+      return updated;
+    });
+    showToast('Se han eliminado las tareas del calendario.');
+
+    try {
+      await fetch(`/api/tasks?calendarId=${encodeURIComponent(calendarId)}&id=all`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: 'all', calendar_id: calendarId })
+      });
+    } catch {
+      // Offline fallback
+    }
+  };
+
+  const importTasksLocal = (importedList: any[], calendarId: string, clearExisting?: boolean) => {
     if (!Array.isArray(importedList) || importedList.length === 0) return;
     const mapped: Task[] = importedList.map(d => ({
       id: d.id,
@@ -614,7 +637,8 @@ export function useTasks() {
     }));
 
     setTasks(prev => {
-      const map = new Map(prev.map(t => [t.id, t]));
+      const base = clearExisting ? prev.filter(t => t.calendarId !== calendarId) : prev;
+      const map = new Map(base.map(t => [t.id, t]));
       for (const t of mapped) {
         map.set(t.id, t);
       }
@@ -658,6 +682,7 @@ export function useTasks() {
     addUser,
     importGoogleTasks,
     importTasksLocal,
+    clearCalendarTasks,
     refreshTasks: fetchTasks
   };
 }

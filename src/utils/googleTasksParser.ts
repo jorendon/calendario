@@ -67,14 +67,29 @@ function computeNextOccurrenceDate(dayOfMonth: number, startYear = 2026, startMo
   return `${y}-${m}-${day}`;
 }
 
+export interface ParseGoogleTasksOptions {
+  calendarId?: string;
+  defaultUser?: string;
+  completionStrategy?: 'all_up_to_current_month_done' | 'original' | 'all_pending' | 'all_done';
+  currentReferenceDate?: Date;
+}
+
 export function parseGoogleTasksJson(
   input: any,
-  options: { calendarId?: string; defaultUser?: string } = {}
+  options: ParseGoogleTasksOptions = {}
 ): NormalizedImportTask[] {
   const {
     calendarId = 'cal-shared-home',
-    defaultUser = 'Jonathan.rendon@gmail.com'
+    defaultUser = 'Jonathan.rendon@gmail.com',
+    completionStrategy = 'all_up_to_current_month_done',
+    currentReferenceDate
   } = options;
+
+  const now = currentReferenceDate || new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed, so 8 for September
+  const lastDayOfCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const endOfCurrentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastDayOfCurrentMonth).padStart(2, '0')}`;
 
   let parsed = input;
   if (typeof input === 'string') {
@@ -182,6 +197,52 @@ export function parseGoogleTasksJson(
           dueDate = '2025-01-01';
         }
 
+        let taskStatus: 'PENDING' | 'DONE' = hasActiveInstance ? 'PENDING' : 'DONE';
+
+        if (completionStrategy === 'all_up_to_current_month_done') {
+          const startY = sched.first_instance_date ? parseInt(sched.first_instance_date.substring(0, 4), 10) : 2025;
+          const startM = sched.first_instance_date ? parseInt(sched.first_instance_date.substring(5, 7), 10) - 1 : 0;
+
+          if (recurrence === 'MONTHLY' && recurrenceDay) {
+            for (let y = startY; y <= currentYear; y++) {
+              const minM = y === startY ? Math.max(0, startM) : 0;
+              const maxM = y === currentYear ? currentMonth : 11;
+              for (let m = minM; m <= maxM; m++) {
+                const daysInM = new Date(y, m + 1, 0).getDate();
+                const d = Math.min(recurrenceDay, daysInM);
+                const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                completedDatesSet.add(dateStr);
+              }
+            }
+          } else if (recurrence === 'WEEKLY') {
+            const [yStr, mStr, dStr] = dueDate.split('-').map(Number);
+            const targetWeekday = new Date(yStr, mStr - 1, dStr).getDay();
+            const cur = new Date(startY, startM, 1);
+            const endLimit = new Date(currentYear, currentMonth + 1, 0);
+            while (cur <= endLimit) {
+              if (cur.getDay() === targetWeekday) {
+                const y = cur.getFullYear();
+                const m = String(cur.getMonth() + 1).padStart(2, '0');
+                const d = String(cur.getDate()).padStart(2, '0');
+                completedDatesSet.add(`${y}-${m}-${d}`);
+              }
+              cur.setDate(cur.getDate() + 1);
+            }
+          }
+          // Remove any completed dates after end of current month
+          for (const d of Array.from(completedDatesSet)) {
+            if (d > endOfCurrentMonthStr) {
+              completedDatesSet.delete(d);
+            }
+          }
+          taskStatus = 'PENDING';
+        } else if (completionStrategy === 'all_pending') {
+          completedDatesSet.clear();
+          taskStatus = 'PENDING';
+        } else if (completionStrategy === 'all_done') {
+          taskStatus = 'DONE';
+        }
+
         results.push({
           id: `gtask-rec-${recId}`,
           title: rec.title.trim(),
@@ -194,7 +255,7 @@ export function parseGoogleTasksJson(
           recurrence,
           recurrence_day: recurrenceDay,
           completed_dates: Array.from(completedDatesSet).sort(),
-          status: hasActiveInstance ? 'PENDING' : 'DONE',
+          status: taskStatus,
           created_by: defaultUser,
           google_task_id: recId
         });
@@ -217,6 +278,24 @@ export function parseGoogleTasksJson(
                         new Date().toISOString().split('T')[0];
 
         const isCompleted = item.status === 'completed' || Boolean(item.completed);
+        let standaloneStatus: 'PENDING' | 'DONE' = isCompleted ? 'DONE' : 'PENDING';
+        let standaloneCompletedDates: string[] = isCompleted ? [rawDate] : [];
+
+        if (completionStrategy === 'all_up_to_current_month_done') {
+          if (rawDate <= endOfCurrentMonthStr) {
+            standaloneStatus = 'DONE';
+            standaloneCompletedDates = [rawDate];
+          } else {
+            standaloneStatus = 'PENDING';
+            standaloneCompletedDates = [];
+          }
+        } else if (completionStrategy === 'all_pending') {
+          standaloneStatus = 'PENDING';
+          standaloneCompletedDates = [];
+        } else if (completionStrategy === 'all_done') {
+          standaloneStatus = 'DONE';
+          standaloneCompletedDates = [rawDate];
+        }
 
         results.push({
           id: `gtask-item-${item.id}`,
@@ -228,8 +307,8 @@ export function parseGoogleTasksJson(
           currency: 'USD',
           category: inferCategory(title, notes),
           recurrence: 'NONE',
-          completed_dates: isCompleted ? [rawDate] : [],
-          status: isCompleted ? 'DONE' : 'PENDING',
+          completed_dates: standaloneCompletedDates,
+          status: standaloneStatus,
           created_by: defaultUser,
           google_task_id: item.id
         });
