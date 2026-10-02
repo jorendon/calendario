@@ -86,7 +86,9 @@ describe('JSON tasks import normalization', () => {
       ]
     };
 
-    const parsed = parseGoogleTasksJson(googleTasksTakeout);
+    const parsed = parseGoogleTasksJson(googleTasksTakeout, {
+      completionStrategy: 'original'
+    });
 
     // Should create 2 recurring tasks + 1 standalone task = 3 tasks (empty title ignored)
     expect(parsed).toHaveLength(3);
@@ -246,7 +248,8 @@ describe('JSON tasks import normalization', () => {
 
     const data = JSON.parse(fs.readFileSync(path, 'utf8'));
     const parsed = parseGoogleTasksJson(data, {
-      completionStrategy: 'all_up_to_current_month_done'
+      completionStrategy: 'all_up_to_current_month_done',
+      currentReferenceDate: new Date(2026, 8, 29)
     });
 
     const recurring = parsed.filter(t => t.recurrence && t.recurrence !== 'NONE');

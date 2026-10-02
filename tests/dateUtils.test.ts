@@ -109,4 +109,31 @@ describe('dateUtils', () => {
     expect(isTaskOccurrenceCompleted(task, '2026-09-25')).toBe(true);
     expect(isTaskOccurrenceCompleted(task, '2026-10-25')).toBe(false);
   });
+
+  it('preserves completed state when monthly task schedule shifts days (e.g. from 1st to 30th)', () => {
+    // Task was originally on day 1 and marked complete in Jan, Feb, Mar 2025
+    const insuranceTask: Task = {
+      id: 'task-insurance',
+      calendarId: 'cal-1',
+      title: 'Seguro de salud',
+      dueDate: '2025-01-30', // changed to 30th
+      recurrence: 'MONTHLY',
+      recurrenceDay: 30, // changed from 1 to 30
+      // Previous completed dates recorded on day 1
+      completedDates: ['2025-01-01', '2025-02-01', '2025-03-01'],
+      status: 'PENDING',
+      category: 'bills',
+      createdBy: 'Jonathan.rendon@gmail.com',
+      createdAt: '2025-01-01T00:00:00Z'
+    };
+
+    // New occurrence dates on the 30th must stay completed!
+    expect(isTaskOccurrenceCompleted(insuranceTask, '2025-01-30')).toBe(true);
+    expect(isTaskOccurrenceCompleted(insuranceTask, '2025-02-28')).toBe(true);
+    expect(isTaskOccurrenceCompleted(insuranceTask, '2025-03-30')).toBe(true);
+
+    // April 2025 onwards was not completed, so it must stay pending!
+    expect(isTaskOccurrenceCompleted(insuranceTask, '2025-04-30')).toBe(false);
+    expect(isTaskOccurrenceCompleted(insuranceTask, '2026-10-30')).toBe(false);
+  });
 });

@@ -246,7 +246,25 @@ function toPgTextArray(arr: any): string {
     const calendar_id = existingTask.calendar_id || body.calendar_id || body.calendarId || 'cal-shared-home';
 
     const status = body.status !== undefined ? body.status : existingTask.status;
-    const completed_dates = body.completed_dates !== undefined ? body.completed_dates : (body.completedDates !== undefined ? body.completedDates : (existingTask.completed_dates || []));
+    let completed_dates = body.completed_dates !== undefined ? body.completed_dates : (body.completedDates !== undefined ? body.completedDates : (existingTask.completed_dates || []));
+
+    // If recurrence_day or due_date changed on a MONTHLY recurring task, migrate completed_dates
+    if (existingTask.recurrence === 'MONTHLY' && recurrence === 'MONTHLY' && Array.isArray(completed_dates) && completed_dates.length > 0) {
+      const oldDay = existingTask.recurrence_day || (existingTask.due_date ? parseInt(existingTask.due_date.split('-')[2], 10) : 1);
+      const newDay = recurrence_day || (due_date ? parseInt(due_date.split('-')[2], 10) : oldDay);
+      if (oldDay !== newDay && oldDay && newDay) {
+        completed_dates = Array.from(new Set(completed_dates.map((dateStr: string) => {
+          const parts = dateStr.split('-');
+          if (parts.length !== 3) return dateStr;
+          const year = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10);
+          const daysInMonth = new Date(year, month, 0).getDate();
+          const targetDay = Math.min(newDay, daysInMonth);
+          return `${parts[0]}-${parts[1]}-${String(targetDay).padStart(2, '0')}`;
+        })));
+      }
+    }
+
     const completed_by = body.completed_by || body.completedBy;
 
     // Detect action: completion, reopening, or edit

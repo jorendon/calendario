@@ -179,10 +179,54 @@ export function isTaskScheduledForDate(task: Task, date: Date): boolean {
 export function isTaskOccurrenceCompleted(task: Task, dateStr: string): boolean {
   if (!task) return false;
   const completedDates = task.completedDates || (task as any).completed_dates || [];
-  if (task.recurrence && task.recurrence !== 'NONE') {
-    return Boolean(Array.isArray(completedDates) && completedDates.includes(dateStr));
+  if (!task.recurrence || task.recurrence === 'NONE') {
+    return task.status === 'DONE';
   }
-  return task.status === 'DONE';
+
+  if (!Array.isArray(completedDates) || completedDates.length === 0) {
+    return false;
+  }
+
+  // 1. Direct exact match
+  if (completedDates.includes(dateStr)) {
+    return true;
+  }
+
+  // 2. Intelligent monthly recurrence match:
+  // If task is monthly and the user modified the recurrence day (e.g. from day 1 to 30),
+  // any previous completion in the same month (or within 4 days across month boundaries) counts as completed.
+  if (task.recurrence === 'MONTHLY') {
+    const yearMonth = dateStr.substring(0, 7); // e.g. "2025-03"
+    if (completedDates.some(d => d.startsWith(yearMonth))) {
+      return true;
+    }
+
+    // Check month-boundary shifts (e.g. 30th of prev month vs 1st of month: difference <= 4 days)
+    const targetDateObj = parseISODate(dateStr);
+    if (!isNaN(targetDateObj.getTime())) {
+      const targetTime = targetDateObj.getTime();
+      const hasNearBoundaryCompletion = completedDates.some(d => {
+        const dObj = parseISODate(d);
+        if (isNaN(dObj.getTime())) return false;
+        const diffDays = Math.abs(dObj.getTime() - targetTime) / 86400000;
+        return diffDays <= 4;
+      });
+      if (hasNearBoundaryCompletion) {
+        return true;
+      }
+    }
+  }
+
+  // 3. Intelligent yearly recurrence match:
+  // If task is yearly, match completion by year
+  if (task.recurrence === 'YEARLY') {
+    const year = dateStr.substring(0, 4);
+    if (completedDates.some(d => d.startsWith(year))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function formatRecurrenceLabel(recurrence?: TaskRecurrence, day?: number): string {

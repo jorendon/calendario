@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Task, Calendar, User, Category } from '../types';
 import confetti from 'canvas-confetti';
+import { parseISODate, isTaskOccurrenceCompleted } from '../utils/dateUtils';
 
 const STORAGE_TASKS_KEY = 'calendario_tasks_cache_v2';
 const STORAGE_CALENDARS_KEY = 'calendario_calendars_cache_v2';
@@ -302,11 +303,31 @@ export function useTasks() {
     let isDone = false;
 
     if (isRecurring) {
-      const isAlreadyCompleted = nextCompletedDates.includes(targetDate);
-      nextCompletedDates = isAlreadyCompleted
-        ? nextCompletedDates.filter(d => d !== targetDate)
-        : [...nextCompletedDates, targetDate];
-      isDone = !isAlreadyCompleted;
+      const isAlreadyCompleted = isTaskOccurrenceCompleted(currentTask, targetDate);
+      if (isAlreadyCompleted) {
+        if (currentTask.recurrence === 'MONTHLY') {
+          const ym = targetDate.substring(0, 7);
+          const targetTime = parseISODate(targetDate).getTime();
+          nextCompletedDates = nextCompletedDates.filter(d => {
+            if (d === targetDate) return false;
+            if (d.startsWith(ym)) return false;
+            const dTime = parseISODate(d).getTime();
+            if (!isNaN(dTime) && !isNaN(targetTime) && Math.abs(dTime - targetTime) <= 4 * 86400000) {
+              return false;
+            }
+            return true;
+          });
+        } else if (currentTask.recurrence === 'YEARLY') {
+          const year = targetDate.substring(0, 4);
+          nextCompletedDates = nextCompletedDates.filter(d => d !== targetDate && !d.startsWith(year));
+        } else {
+          nextCompletedDates = nextCompletedDates.filter(d => d !== targetDate);
+        }
+        isDone = false;
+      } else {
+        nextCompletedDates = [...nextCompletedDates, targetDate];
+        isDone = true;
+      }
     } else {
       nextStatus = currentTask.status === 'DONE' ? 'PENDING' : 'DONE';
       isDone = nextStatus === 'DONE';
@@ -368,9 +389,56 @@ export function useTasks() {
   // Update Task details
   const updateTask = async (taskId: string, updates: Partial<Task>) => {
     const existing = tasks.find(t => t.id === taskId);
-    const updatedFullTask: Task = existing
-      ? { ...existing, ...updates }
-      : ({ id: taskId, ...updates } as Task);
+    if (!existing) return;
+
+    let migratedCompletedDates = updates.completedDates !== undefined
+      ? updates.completedDates
+      : (existing.completedDates || []);
+
+    // When modifying the schedule of a recurring task, automatically migrate completed dates
+    // to the new recurrence day so completed occurrences never get lost or unchecked!
+    const oldRecurrence = existing.recurrence || 'NONE';
+    const newRecurrence = updates.recurrence !== undefined ? updates.recurrence : oldRecurrence;
+
+    if (oldRecurrence === 'MONTHLY' && newRecurrence === 'MONTHLY' && Array.isArray(migratedCompletedDates) && migratedCompletedDates.length > 0) {
+      const oldDay = existing.recurrenceDay || (existing.dueDate ? parseISODate(existing.dueDate).getDate() : 1);
+      const newDay = updates.recurrenceDay !== undefined
+        ? updates.recurrenceDay
+        : (updates.dueDate ? parseISODate(updates.dueDate).getDate() : oldDay);
+
+      if (oldDay !== newDay) {
+        const oldStart = existing.dueDate ? parseISODate(existing.dueDate) : null;
+        const newStart = updates.dueDate ? parseISODate(updates.dueDate) : null;
+        const monthOffset = (oldStart && newStart && !isNaN(oldStart.getTime()) && !isNaN(newStart.getTime()))
+          ? (newStart.getFullYear() * 12 + newStart.getMonth()) - (oldStart.getFullYear() * 12 + oldStart.getMonth())
+          : 0;
+
+        migratedCompletedDates = Array.from(new Set(migratedCompletedDates.map(dateStr => {
+          const parts = dateStr.split('-');
+          if (parts.length !== 3) return dateStr;
+          let year = parseInt(parts[0], 10);
+          let month = parseInt(parts[1], 10);
+
+          if (monthOffset !== 0) {
+            const shifted = new Date(year, month - 1 + monthOffset, 1);
+            year = shifted.getFullYear();
+            month = shifted.getMonth() + 1;
+          }
+
+          const daysInMonth = new Date(year, month, 0).getDate();
+          const targetDay = Math.min(newDay, daysInMonth);
+          const mm = String(month).padStart(2, '0');
+          const dd = String(targetDay).padStart(2, '0');
+          return `${year}-${mm}-${dd}`;
+        })));
+      }
+    }
+
+    const updatedFullTask: Task = {
+      ...existing,
+      ...updates,
+      completedDates: migratedCompletedDates
+    };
 
     setTasks(prev =>
       prev.map(task => (task.id === taskId ? updatedFullTask : task))
