@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterTaskReminders, calculateSummary } from '../src/utils/reminders';
+import { filterTaskReminders, calculateSummary, getOverdueTaskItems } from '../src/utils/reminders';
 import { Task } from '../src/types';
 
 describe('reminders and calendar summary', () => {
@@ -78,5 +78,13 @@ describe('reminders and calendar summary', () => {
     expect(summary.overdueTasks).toBe(1);
     // 1800 (rent) + 80 (internet) = 1880 pending amount (car insurance is DONE so excluded)
     expect(summary.totalPendingAmount).toBe(1880);
+  });
+
+  it('detects overdue items with occurrence dates for both standalone and recurring tasks', () => {
+    const overdueList = getOverdueTaskItems(mockTasks, refDate);
+    expect(overdueList.length).toBe(1);
+    expect(overdueList[0].task.title).toBe('Pagar servicio de internet');
+    expect(overdueList[0].occurrenceDate).toBe('2026-09-15');
+    expect(overdueList[0].daysOverdue).toBe(3);
   });
 });

@@ -18,6 +18,7 @@ import { GoogleSyncModal } from './components/GoogleSync/GoogleSyncModal';
 import { JsonImportModal } from './components/Tasks/JsonImportModal';
 import { EmailDiagnosticsModal } from './components/Email/EmailDiagnosticsModal';
 import { InstallAppModal } from './components/Install/InstallAppModal';
+import { OverdueTasksModal } from './components/Tasks/OverdueTasksModal';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
 import { Sparkles } from 'lucide-react';
 
@@ -69,6 +70,7 @@ export const App: React.FC = () => {
   const [isJsonImportOpen, setIsJsonImportOpen] = useState(false);
   const [isEmailDiagnosticsOpen, setIsEmailDiagnosticsOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isOverdueModalOpen, setIsOverdueModalOpen] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
 
   useEffect(() => {
@@ -173,6 +175,7 @@ export const App: React.FC = () => {
           summary={summary}
           onCreateCalendar={createCalendar}
           onDeleteCalendar={deleteCalendar}
+          onOpenOverdueModal={() => setIsOverdueModalOpen(true)}
         />
 
         {/* Calendar View Area */}
@@ -323,6 +326,16 @@ export const App: React.FC = () => {
         onInstalled={() => {
           setDeferredInstallPrompt(null);
         }}
+      />
+
+      <OverdueTasksModal
+        isOpen={isOverdueModalOpen}
+        onClose={() => setIsOverdueModalOpen(false)}
+        tasks={tasks}
+        calendars={calendars}
+        currentDate={currentDate}
+        onToggleTask={toggleTaskStatus}
+        onSelectTask={handleSelectTask}
       />
     </div>
   );

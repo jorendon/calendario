@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar as CalendarType, CalendarSummary } from '../../types';
-import { Plus, Calendar, AlertCircle, Clock, CheckCircle, DollarSign, Layers, Trash2 } from 'lucide-react';
+import { Plus, Calendar, AlertCircle, Clock, CheckCircle, DollarSign, Layers, Trash2, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '../../utils/dateUtils';
 
 interface CalendarSidebarProps {
@@ -10,6 +10,7 @@ interface CalendarSidebarProps {
   summary: CalendarSummary;
   onCreateCalendar: (name: string, color: string, description?: string) => void;
   onDeleteCalendar?: (id: string) => void;
+  onOpenOverdueModal?: () => void;
 }
 
 const PRESET_COLORS = [
@@ -28,7 +29,8 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
   onSelectCalendar,
   summary,
   onCreateCalendar,
-  onDeleteCalendar
+  onDeleteCalendar,
+  onOpenOverdueModal
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newCalName, setNewCalName] = useState('');
@@ -64,17 +66,33 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
             </span>
           </div>
 
-          {summary.overdueTasks > 0 && (
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="flex items-center space-x-1.5">
-                <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-                <span>Atrasadas:</span>
+          {/* Atrasadas clickable row */}
+          <div
+            onClick={onOpenOverdueModal}
+            className={`flex items-center justify-between p-1.5 -mx-1.5 rounded-xl transition-all cursor-pointer group select-none ${
+              summary.overdueTasks > 0
+                ? 'hover:bg-rose-950/40 text-slate-200'
+                : 'hover:bg-slate-800/60 text-slate-400'
+            }`}
+            title="Ver tareas atrasadas"
+          >
+            <span className="flex items-center space-x-1.5 group-hover:text-rose-300 transition-colors">
+              <AlertCircle className={`w-3.5 h-3.5 ${summary.overdueTasks > 0 ? 'text-rose-400' : 'text-slate-500'}`} />
+              <span className={`font-medium ${summary.overdueTasks > 0 ? 'text-rose-200 underline decoration-rose-500/40 underline-offset-2' : ''}`}>
+                Atrasadas:
               </span>
-              <span className="font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                {summary.overdueTasks}
-              </span>
-            </div>
-          )}
+            </span>
+            <span
+              className={`font-bold px-2 py-0.5 rounded-full border transition-all flex items-center space-x-1 ${
+                summary.overdueTasks > 0
+                  ? 'text-rose-300 bg-rose-500/20 border-rose-500/30 group-hover:bg-rose-500/30 group-hover:border-rose-500/50'
+                  : 'text-slate-400 bg-slate-800/50 border-slate-700/50'
+              }`}
+            >
+              <span>{summary.overdueTasks}</span>
+              <ChevronRight className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+            </span>
+          </div>
 
           <div className="flex items-center justify-between text-slate-300">
             <span className="flex items-center space-x-1.5">
