@@ -12,6 +12,7 @@ interface CalendarSidebarProps {
   onDeleteCalendar?: (id: string) => void;
   onOpenOverdueModal?: () => void;
   onOpenDueTodayModal?: () => void;
+  onOpenMonthPendingModal?: () => void;
 }
 
 const PRESET_COLORS = [
@@ -32,7 +33,8 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
   onCreateCalendar,
   onDeleteCalendar,
   onOpenOverdueModal,
-  onOpenDueTodayModal
+  onOpenDueTodayModal,
+  onOpenMonthPendingModal
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newCalName, setNewCalName] = useState('');
@@ -166,13 +168,31 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="flex items-center space-x-1.5 text-amber-400">
+            <div
+              onClick={onOpenMonthPendingModal}
+              className={`flex items-center justify-between p-1.5 -mx-1.5 rounded-xl transition-all cursor-pointer group select-none ${
+                (summary.monthPendingTasks || 0) > 0 || (summary.monthPendingAmount || 0) > 0
+                  ? 'hover:bg-amber-950/40 text-slate-200'
+                  : 'hover:bg-slate-800/60 text-slate-400'
+              }`}
+              title="Ver tareas pendientes del mes"
+            >
+              <span className="flex items-center space-x-1.5 text-amber-400 group-hover:text-amber-300 transition-colors">
                 <Clock className="w-3.5 h-3.5" />
-                <span>Por Pagar:</span>
+                <span className={`font-medium ${(summary.monthPendingTasks || 0) > 0 ? 'underline decoration-amber-500/40 underline-offset-2' : ''}`}>
+                  Por Pagar:
+                </span>
+                {(summary.monthPendingTasks || 0) > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    {summary.monthPendingTasks}
+                  </span>
+                )}
               </span>
-              <span className="font-extrabold text-amber-400">
-                {formatCurrency(summary.monthPendingAmount || 0)}
+              <span className="flex items-center space-x-1">
+                <span className="font-extrabold text-amber-400">
+                  {formatCurrency(summary.monthPendingAmount || 0)}
+                </span>
+                <ChevronRight className="w-3 h-3 text-amber-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </span>
             </div>
           </div>

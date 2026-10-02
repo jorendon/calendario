@@ -7,6 +7,13 @@ export interface OverdueTaskItem {
   daysOverdue: number;
 }
 
+export interface MonthPendingTaskItem {
+  task: Task;
+  occurrenceDate: string;
+  isOverdue: boolean;
+  isToday: boolean;
+}
+
 export interface FilteredReminders {
   dueToday: Task[];
   overdue: Task[];
@@ -65,6 +72,53 @@ export function getOverdueTaskItems(tasks: Task[], refDate: Date = new Date()): 
   }
 
   // Sort by occurrenceDate (oldest overdue first)
+  items.sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate));
+  return items;
+}
+
+export function getMonthPendingTaskItems(tasks: Task[], refDate: Date = new Date()): MonthPendingTaskItem[] {
+  const todayStr = toISODateString(new Date());
+  const year = refDate.getFullYear();
+  const month = refDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  const items: MonthPendingTaskItem[] = [];
+
+  for (const task of tasks) {
+    if (!task) continue;
+    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+
+    if (!isRecurring) {
+      const dueDate = task.dueDate || (task as any).due_date || '';
+      if (dueDate.startsWith(monthPrefix) && task.status !== 'DONE') {
+        items.push({
+          task,
+          occurrenceDate: dueDate,
+          isOverdue: dueDate < todayStr,
+          isToday: dueDate === todayStr
+        });
+      }
+    } else {
+      // Check each day of the active month
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayDate = new Date(year, month, day);
+        if (isTaskScheduledForDate(task, dayDate)) {
+          const dateStr = toISODateString(dayDate);
+          if (!isTaskOccurrenceCompleted(task, dateStr)) {
+            items.push({
+              task,
+              occurrenceDate: dateStr,
+              isOverdue: dateStr < todayStr,
+              isToday: dateStr === todayStr
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Sort chronologically by occurrenceDate
   items.sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate));
   return items;
 }

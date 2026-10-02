@@ -20,6 +20,7 @@ import { EmailDiagnosticsModal } from './components/Email/EmailDiagnosticsModal'
 import { InstallAppModal } from './components/Install/InstallAppModal';
 import { OverdueTasksModal } from './components/Tasks/OverdueTasksModal';
 import { DueTodayTasksModal } from './components/Tasks/DueTodayTasksModal';
+import { MonthPendingTasksModal } from './components/Tasks/MonthPendingTasksModal';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
 import { Sparkles } from 'lucide-react';
 
@@ -73,6 +74,7 @@ export const App: React.FC = () => {
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isOverdueModalOpen, setIsOverdueModalOpen] = useState(false);
   const [isDueTodayModalOpen, setIsDueTodayModalOpen] = useState(false);
+  const [isMonthPendingModalOpen, setIsMonthPendingModalOpen] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
 
   useEffect(() => {
@@ -179,6 +181,7 @@ export const App: React.FC = () => {
           onDeleteCalendar={deleteCalendar}
           onOpenOverdueModal={() => setIsOverdueModalOpen(true)}
           onOpenDueTodayModal={() => setIsDueTodayModalOpen(true)}
+          onOpenMonthPendingModal={() => setIsMonthPendingModalOpen(true)}
         />
 
         {/* Calendar View Area */}
@@ -344,6 +347,16 @@ export const App: React.FC = () => {
       <DueTodayTasksModal
         isOpen={isDueTodayModalOpen}
         onClose={() => setIsDueTodayModalOpen(false)}
+        tasks={tasks}
+        calendars={calendars}
+        currentDate={currentDate}
+        onToggleTask={toggleTaskStatus}
+        onSelectTask={handleSelectTask}
+      />
+
+      <MonthPendingTasksModal
+        isOpen={isMonthPendingModalOpen}
+        onClose={() => setIsMonthPendingModalOpen(false)}
         tasks={tasks}
         calendars={calendars}
         currentDate={currentDate}

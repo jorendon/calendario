@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterTaskReminders, calculateSummary, getOverdueTaskItems } from '../src/utils/reminders';
+import { filterTaskReminders, calculateSummary, getOverdueTaskItems, getMonthPendingTaskItems } from '../src/utils/reminders';
 import { Task } from '../src/types';
 
 describe('reminders and calendar summary', () => {
@@ -134,5 +134,15 @@ describe('reminders and calendar summary', () => {
     expect(overdueList[0].task.title).toBe('Pagar servicio de internet');
     expect(overdueList[0].occurrenceDate).toBe('2026-09-15');
     expect(overdueList[0].daysOverdue).toBe(3);
+  });
+
+  it('retrieves month pending task items with correct count and status flags', () => {
+    const pendingItems = getMonthPendingTaskItems(mockTasks, refDate);
+    // In mockTasks, 3 tasks in Sep 2026 are pending: task-1 (today), task-2 (overdue), task-3 (upcoming)
+    expect(pendingItems.length).toBe(3);
+    expect(pendingItems.map(p => p.task.id)).toEqual(['task-2', 'task-1', 'task-3']);
+    expect(pendingItems[0].occurrenceDate).toBe('2026-09-15');
+    expect(pendingItems[1].occurrenceDate).toBe('2026-09-18');
+    expect(pendingItems[2].occurrenceDate).toBe('2026-09-22');
   });
 });
