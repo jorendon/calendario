@@ -11,6 +11,7 @@ interface CalendarSidebarProps {
   onCreateCalendar: (name: string, color: string, description?: string) => void;
   onDeleteCalendar?: (id: string) => void;
   onOpenOverdueModal?: () => void;
+  onOpenDueTodayModal?: () => void;
 }
 
 const PRESET_COLORS = [
@@ -30,7 +31,8 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
   summary,
   onCreateCalendar,
   onDeleteCalendar,
-  onOpenOverdueModal
+  onOpenOverdueModal,
+  onOpenDueTodayModal
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newCalName, setNewCalName] = useState('');
@@ -56,13 +58,31 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
         </h3>
 
         <div className="space-y-2 text-xs">
-          <div className="flex items-center justify-between text-slate-300">
-            <span className="flex items-center space-x-1.5">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
-              <span>Vencen hoy:</span>
+          {/* Vencen hoy clickable row */}
+          <div
+            onClick={onOpenDueTodayModal}
+            className={`flex items-center justify-between p-1.5 -mx-1.5 rounded-xl transition-all cursor-pointer group select-none ${
+              summary.dueTodayTasks > 0
+                ? 'hover:bg-amber-950/40 text-slate-200'
+                : 'hover:bg-slate-800/60 text-slate-400'
+            }`}
+            title="Ver tareas que vencen hoy"
+          >
+            <span className="flex items-center space-x-1.5 group-hover:text-amber-300 transition-colors">
+              <Clock className={`w-3.5 h-3.5 ${summary.dueTodayTasks > 0 ? 'text-amber-400' : 'text-slate-500'}`} />
+              <span className={`font-medium ${summary.dueTodayTasks > 0 ? 'text-amber-200 underline decoration-amber-500/40 underline-offset-2' : ''}`}>
+                Vencen hoy:
+              </span>
             </span>
-            <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-              {summary.dueTodayTasks}
+            <span
+              className={`font-bold px-2 py-0.5 rounded-full border transition-all flex items-center space-x-1 ${
+                summary.dueTodayTasks > 0
+                  ? 'text-amber-300 bg-amber-500/20 border-amber-500/30 group-hover:bg-amber-500/30 group-hover:border-amber-500/50'
+                  : 'text-slate-400 bg-slate-800/50 border-slate-700/50'
+              }`}
+            >
+              <span>{summary.dueTodayTasks}</span>
+              <ChevronRight className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
             </span>
           </div>
 
