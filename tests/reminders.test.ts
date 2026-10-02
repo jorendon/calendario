@@ -78,6 +78,54 @@ describe('reminders and calendar summary', () => {
     expect(summary.overdueTasks).toBe(1);
     // 1800 (rent) + 80 (internet) = 1880 pending amount (car insurance is DONE so excluded)
     expect(summary.totalPendingAmount).toBe(1880);
+    // Month budget calculations:
+    expect(summary.monthName).toBe('Septiembre 2026');
+    expect(summary.monthPaidAmount).toBe(150);
+    expect(summary.monthPendingAmount).toBe(1880);
+    expect(summary.monthTotalBudget).toBe(2030);
+    expect(summary.monthTotalTasks).toBe(4);
+    expect(summary.monthCompletedTasks).toBe(1);
+    expect(summary.monthPendingTasks).toBe(3);
+  });
+
+  it('calculates monthly budget correctly with recurring tasks', () => {
+    const tasksWithRecurring: Task[] = [
+      {
+        id: 'rec-1',
+        calendarId: 'cal-1',
+        title: 'Gimnasio mensual',
+        amount: 50,
+        dueDate: '2026-01-05',
+        category: 'fitness',
+        recurrence: 'MONTHLY',
+        recurrenceDay: 5,
+        completedDates: ['2026-09-05'],
+        status: 'PENDING',
+        createdBy: 'Jonathan.rendon@gmail.com',
+        createdAt: '2026-01-01T00:00:00Z'
+      },
+      {
+        id: 'rec-2',
+        calendarId: 'cal-1',
+        title: 'Membresía streaming',
+        amount: 15,
+        dueDate: '2026-01-20',
+        category: 'entertainment',
+        recurrence: 'MONTHLY',
+        recurrenceDay: 20,
+        completedDates: [],
+        status: 'PENDING',
+        createdBy: 'Jonathan.rendon@gmail.com',
+        createdAt: '2026-01-01T00:00:00Z'
+      }
+    ];
+
+    const summary = calculateSummary(tasksWithRecurring, refDate);
+    expect(summary.monthPaidAmount).toBe(50);
+    expect(summary.monthPendingAmount).toBe(15);
+    expect(summary.monthTotalBudget).toBe(65);
+    expect(summary.monthCompletedTasks).toBe(1);
+    expect(summary.monthPendingTasks).toBe(1);
   });
 
   it('detects overdue items with occurrence dates for both standalone and recurring tasks', () => {

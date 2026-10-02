@@ -103,18 +103,59 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
               {summary.completedTasks} / {summary.totalTasks}
             </span>
           </div>
+        </div>
 
-          {summary.totalPendingAmount > 0 && (
-            <div className="pt-2 mt-2 border-t border-indigo-500/20 flex items-center justify-between">
-              <span className="flex items-center space-x-1 text-slate-300">
-                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Total a Pagar:</span>
-              </span>
-              <span className="font-extrabold text-emerald-400 text-sm">
-                {formatCurrency(summary.totalPendingAmount)}
-              </span>
+        {/* Presupuesto del Mes */}
+        <div className="pt-3 mt-3 border-t border-indigo-500/20 space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300 flex items-center space-x-1">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Presupuesto {summary.monthName ? `(${summary.monthName.split(' ')[0]})` : ''}</span>
+            </span>
+            <span className="font-extrabold text-white">
+              {formatCurrency(summary.monthTotalBudget || 0)}
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          {(summary.monthTotalBudget || 0) > 0 && (
+            <div className="space-y-1">
+              <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, Math.round(((summary.monthPaidAmount || 0) / summary.monthTotalBudget) * 100))}%`
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-slate-400">
+                <span>{Math.round(((summary.monthPaidAmount || 0) / summary.monthTotalBudget) * 100)}% pagado</span>
+                <span>Restante: {formatCurrency(summary.monthPendingAmount || 0)}</span>
+              </div>
             </div>
           )}
+
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between text-slate-300">
+              <span className="flex items-center space-x-1.5 text-emerald-400">
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span>Total Pagado:</span>
+              </span>
+              <span className="font-extrabold text-emerald-400">
+                {formatCurrency(summary.monthPaidAmount || 0)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-slate-300">
+              <span className="flex items-center space-x-1.5 text-amber-400">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Por Pagar:</span>
+              </span>
+              <span className="font-extrabold text-amber-400">
+                {formatCurrency(summary.monthPendingAmount || 0)}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 

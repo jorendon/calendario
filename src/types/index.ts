@@ -59,4 +59,12 @@ export interface CalendarSummary {
   dueTodayTasks: number;
   overdueTasks: number;
   totalPendingAmount: number;
+  totalPaidAmount: number;
+  monthName?: string;
+  monthTotalBudget: number;
+  monthPaidAmount: number;
+  monthPendingAmount: number;
+  monthTotalTasks: number;
+  monthCompletedTasks: number;
+  monthPendingTasks: number;
 }

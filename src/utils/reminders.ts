@@ -116,16 +116,85 @@ export function calculateSummary(tasks: Task[], refDate: Date = new Date()): Cal
   
   let pendingCount = 0;
   let totalPendingAmount = 0;
+  let totalPaidAmount = 0;
 
   for (const task of tasks) {
-    const isDone = task.status === 'DONE';
-    if (!isDone) {
+    if (!task) continue;
+    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+    const amount = Number(task.amount) || 0;
+
+    if (!isRecurring) {
+      if (task.status === 'DONE') {
+        totalPaidAmount += amount;
+      } else {
+        pendingCount++;
+        totalPendingAmount += amount;
+      }
+    } else {
+      const completedDates = task.completedDates || (task as any).completed_dates || [];
+      if (Array.isArray(completedDates)) {
+        totalPaidAmount += amount * completedDates.length;
+      }
       pendingCount++;
-      if (task.amount) {
-        totalPendingAmount += Number(task.amount);
+      totalPendingAmount += amount;
+    }
+  }
+
+  // Monthly Budget & Task Counts Calculation for the active month (refDate)
+  const year = refDate.getFullYear();
+  const month = refDate.getMonth(); // 0-indexed
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  const monthNames = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  const monthName = `${monthNames[month]} ${year}`;
+
+  let monthPaidAmount = 0;
+  let monthPendingAmount = 0;
+  let monthCompletedTasks = 0;
+  let monthPendingTasks = 0;
+  let monthTotalTasks = 0;
+
+  for (const task of tasks) {
+    if (!task) continue;
+    const isRecurring = task.recurrence && task.recurrence !== 'NONE';
+    const amount = Number(task.amount) || 0;
+
+    if (!isRecurring) {
+      const dueDate = task.dueDate || (task as any).due_date || '';
+      if (dueDate.startsWith(monthPrefix)) {
+        monthTotalTasks++;
+        if (task.status === 'DONE') {
+          monthCompletedTasks++;
+          monthPaidAmount += amount;
+        } else {
+          monthPendingTasks++;
+          monthPendingAmount += amount;
+        }
+      }
+    } else {
+      // Check each day of the active month for scheduled occurrences
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayDate = new Date(year, month, day);
+        if (isTaskScheduledForDate(task, dayDate)) {
+          const dateStr = toISODateString(dayDate);
+          monthTotalTasks++;
+          if (isTaskOccurrenceCompleted(task, dateStr)) {
+            monthCompletedTasks++;
+            monthPaidAmount += amount;
+          } else {
+            monthPendingTasks++;
+            monthPendingAmount += amount;
+          }
+        }
       }
     }
   }
+
+  const monthTotalBudget = monthPaidAmount + monthPendingAmount;
 
   return {
     totalTasks: tasks.length,
@@ -133,6 +202,14 @@ export function calculateSummary(tasks: Task[], refDate: Date = new Date()): Cal
     completedTasks: completedRecently.length,
     dueTodayTasks: dueToday.length,
     overdueTasks: overdueItems.length,
-    totalPendingAmount
+    totalPendingAmount,
+    totalPaidAmount,
+    monthName,
+    monthTotalBudget,
+    monthPaidAmount,
+    monthPendingAmount,
+    monthTotalTasks,
+    monthCompletedTasks,
+    monthPendingTasks
   };
 }
